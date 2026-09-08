@@ -1,3 +1,8 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Linha de Defesa Klendathu (Vista de Cima)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Share+Tech+Mono&display=swap">
@@ -398,6 +403,39 @@
   .log-list li.info{color:var(--accent);}
   .log-list li::before{content:"› "; color:var(--ink-faint);}
 
+  .rank-list{display:flex; flex-direction:column;}
+  .rank-row{
+    display:grid;
+    grid-template-columns:20px 1fr auto auto;
+    gap:8px;
+    align-items:center;
+    padding:7px 12px;
+    border-bottom:1px solid var(--line-soft);
+    font-family:'Share Tech Mono',monospace;
+    font-size:11.5px;
+  }
+  .rank-row:last-child{border-bottom:none;}
+  .rank-pos{color:var(--ink-faint); font-weight:600;}
+  .rank-row.top .rank-pos{color:var(--accent);}
+  .rank-name{
+    color:var(--ink); font-family:'Oswald',sans-serif; font-size:13px; letter-spacing:.02em;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .rank-wave{color:var(--good);}
+  .rank-kills{color:var(--ink-faint); font-size:10px;}
+  .rank-empty{padding:10px 12px; color:var(--ink-faint); font-size:11.5px; font-family:'Share Tech Mono',monospace;}
+
+  .rank-submit{display:flex; flex-direction:column; gap:8px; width:100%; margin:2px 0;}
+  .rank-submit-row{display:flex; gap:8px;}
+  .rank-submit input{
+    flex:1; min-width:0;
+    background:var(--bg-2); border:1px solid var(--line); color:var(--ink);
+    font-family:'Oswald',sans-serif; font-size:13px;
+    padding:8px 10px;
+  }
+  .rank-submit input:focus-visible{outline:2px solid var(--accent); outline-offset:1px;}
+  .rank-submit-status{font-family:'Share Tech Mono',monospace; font-size:10.5px; color:var(--good); letter-spacing:.05em; min-height:12px;}
+
   footer.credits{
     margin-top:14px;
     text-align:center;
@@ -422,6 +460,8 @@
     .tower-card .desc{display:none;}
   }
 </style>
+</head>
+<body>
 
 <div class="app">
 
@@ -504,6 +544,13 @@
             <div><b id="go-wave">0</b><span>Onda alcançada</span></div>
             <div><b id="go-kills">0</b><span>Bugs abatidos</span></div>
           </div>
+          <div class="rank-submit" id="rank-submit">
+            <div class="rank-submit-row">
+              <input type="text" id="rank-name-input" maxlength="16" placeholder="Seu codinome" autocomplete="off">
+              <button class="btn primary small" id="btn-rank-submit">Registrar</button>
+            </div>
+            <span class="rank-submit-status" id="rank-submit-status"></span>
+          </div>
           <button class="btn danger" id="btn-restart">Reiniciar Operação</button>
         </div>
       </div>
@@ -517,6 +564,11 @@
         <div class="panel-head">Arsenal de Infantaria</div>
         <div class="tower-list" id="tower-list"></div>
         <div style="padding:8px 12px; font-size:10.5px; color:var(--ink-faint); font-family:'Share Tech Mono',monospace; border-top:1px solid var(--line-soft);">Clique numa torre já instalada no mapa para melhorar ou vender.</div>
+      </div>
+
+      <div class="armory" style="margin-top:14px;">
+        <div class="panel-head">Ranking Federal — Top 10</div>
+        <ul class="rank-list" id="rank-list"><li class="rank-empty">Carregando…</li></ul>
       </div>
 
       <div class="armory" style="margin-top:14px;">
@@ -568,6 +620,7 @@
   <footer class="credits">Serviço Federal · Divisão de Infantaria Móvel · "Você gostaria de saber mais?" · Build <span id="build-tag">3.0</span></footer>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 (function(){
@@ -575,6 +628,7 @@
 
   // ---------------- config ----------------
   var GAME_VERSION="3.0-TOP";
+  var RANK_MODE="topdown";
   var TILE=48, COLS=20, ROWS=13;
   var CW=TILE*COLS, CH=TILE*ROWS;
 
@@ -710,6 +764,10 @@
   var btnReport=document.getElementById("btn-report");
   var elWmBuild=document.getElementById("wm-build");
   var elWmCode=document.getElementById("wm-code");
+  var elRankList=document.getElementById("rank-list");
+  var rankNameInput=document.getElementById("rank-name-input");
+  var btnRankSubmit=document.getElementById("btn-rank-submit");
+  var elRankStatus=document.getElementById("rank-submit-status");
   document.getElementById("build-tag-top").textContent=GAME_VERSION;
   document.getElementById("build-tag").textContent=GAME_VERSION;
   elWmBuild.textContent="BUILD "+GAME_VERSION;
@@ -1342,6 +1400,10 @@
     elGoWave.textContent=state.wave;
     elGoKills.textContent=state.killCount;
     elGameOver.classList.add("show");
+    rankSubmitted=false;
+    btnRankSubmit.disabled=false;
+    elRankStatus.textContent="";
+    try{ rankNameInput.value=localStorage.getItem("te_rank_name")||""; }catch(e){ rankNameInput.value=""; }
     sendReport(true);
   }
 
@@ -1362,6 +1424,74 @@
     elGameOver.classList.remove("show");
     addLog("Nova operação iniciada. Boa sorte, cidadão.","info");
     refreshArmory(); renderSelectedPanel();
+  }
+
+  // ---------------- ranking (Supabase) ----------------
+  var RANK_URL="https://rsqbbcsaqmxfriwwbamv.supabase.co";
+  var RANK_KEY="sb_publishable_yCxFBZus6N2UHxY2W8Xdmw_Jo7SCFIx";
+  var sbClient=(window.supabase && window.supabase.createClient) ? window.supabase.createClient(RANK_URL,RANK_KEY) : null;
+  var rankSubmitted=false;
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g,function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  function renderRanking(rows){
+    if(!elRankList) return;
+    if(!rows || !rows.length){
+      elRankList.innerHTML='<li class="rank-empty">Nenhum registro ainda. Seja o primeiro a defender o setor.</li>';
+      return;
+    }
+    elRankList.innerHTML=rows.map(function(r,i){
+      return '<li class="rank-row'+(i<3?' top':'')+'">'+
+        '<span class="rank-pos">'+(i+1)+'</span>'+
+        '<span class="rank-name">'+escapeHtml(r.name)+'</span>'+
+        '<span class="rank-wave">Onda '+r.wave+'</span>'+
+        '<span class="rank-kills">'+r.kills+'x</span>'+
+      '</li>';
+    }).join("");
+  }
+
+  function fetchRanking(){
+    if(!sbClient || !elRankList) return;
+    sbClient.from("tropas_estelares_ranking")
+      .select("name,mode,wave,kills")
+      .order("wave",{ascending:false})
+      .order("kills",{ascending:false})
+      .order("created_at",{ascending:true})
+      .limit(10)
+      .then(function(res){
+        if(res.error){ console.warn("ranking fetch error",res.error); return; }
+        renderRanking(res.data);
+      })
+      .catch(function(err){ console.warn("ranking fetch failed",err); });
+  }
+
+  function submitRanking(){
+    if(!sbClient || rankSubmitted || !rankNameInput) return;
+    var name=(rankNameInput.value||"").trim().slice(0,16) || "Recruta";
+    rankSubmitted=true;
+    btnRankSubmit.disabled=true;
+    elRankStatus.textContent="Enviando...";
+    sbClient.from("tropas_estelares_ranking").insert({
+      name:name, mode:RANK_MODE, wave:state.wave, kills:state.killCount
+    }).then(function(res){
+      if(res.error){
+        elRankStatus.textContent="Falha ao registrar.";
+        rankSubmitted=false;
+        btnRankSubmit.disabled=false;
+        return;
+      }
+      try{ localStorage.setItem("te_rank_name",name); }catch(e){}
+      elRankStatus.textContent="Registrado no ranking!";
+      fetchRanking();
+    }).catch(function(){
+      elRankStatus.textContent="Falha ao registrar.";
+      rankSubmitted=false;
+      btnRankSubmit.disabled=false;
+    });
   }
 
   // ---------------- telemetry (HQ uplink) ----------------
@@ -1854,6 +1984,7 @@
   });
   btnRestart.addEventListener("click",resetGame);
   btnReport.addEventListener("click",function(){ sendReport(false); });
+  btnRankSubmit.addEventListener("click",submitRanking);
 
   // ---------------- loop ----------------
   var last=performance.now();
@@ -1874,9 +2005,12 @@
   }
 
   buildArmory();
+  fetchRanking();
   addLog("Perímetro estabelecido em Klendathu. Aguardando primeira onda.","info");
   addLog("Trechos com mancha vermelha no mapa estão fora do alcance de qualquer torre.","");
   initTelemetry();
   requestAnimationFrame(frame);
 })();
 </script>
+</body>
+</html>
