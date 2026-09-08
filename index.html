@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tropas Estelares — Linha de Defesa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Share+Tech+Mono&display=swap">
+<style>
+  :root{
+    --bg:#0d0c08;
+    --bg-2:#171710;
+    --panel:#1b1c13;
+    --panel-2:#242519;
+    --line:#44462f;
+    --line-soft:#2c2d1e;
+    --ink:#f0ead2;
+    --ink-dim:#b3ad8f;
+    --ink-faint:#7a755c;
+    --accent:#f0b400;
+    --accent-ink:#1a1608;
+    --danger:#d13a26;
+    --danger-dim:#7a2015;
+    --good:#9dc24c;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Oswald',"Arial Narrow",sans-serif;
+    min-height:100vh;
+    position:relative;
+  }
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background-image:radial-gradient(rgba(255,255,255,.07) 1px, transparent 1px);
+    background-size:3px 3px;
+    opacity:.4;
+    pointer-events:none;
+    z-index:0;
+  }
+  .app{
+    position:relative; z-index:1;
+    max-width:1100px;
+    margin:0 auto;
+    padding:26px 18px 40px;
+  }
+
+  .broadcast{
+    border:1px solid var(--line);
+    background:linear-gradient(180deg,var(--bg-2),var(--panel));
+    padding:16px 22px 18px;
+    margin-bottom:26px;
+    position:relative;
+  }
+  .broadcast::before{
+    content:"";
+    position:absolute; inset:0;
+    border:1px solid var(--line-soft);
+    margin:3px;
+    pointer-events:none;
+  }
+  .broadcast-row{
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    font-family:'Share Tech Mono',monospace;
+    font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--ink-dim);
+    margin-bottom:14px;
+  }
+  .live-dot{display:inline-flex; align-items:center; gap:6px; color:var(--danger);}
+  .live-dot i{
+    width:8px;height:8px;border-radius:50%;background:var(--danger);
+    box-shadow:0 0 8px var(--danger);
+    animation:blink 1.4s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion:reduce){ .live-dot i{animation:none;} }
+  @keyframes blink{0%,100%{opacity:1;}50%{opacity:.25;}}
+
+  .broadcast-main{display:flex; align-items:center; justify-content:space-between; gap:24px;}
+  .broadcast-text{flex:1; min-width:0;}
+  .emblem{flex:none; opacity:.96;}
+  @media (max-width:600px){ .emblem{display:none;} }
+
+  h1{
+    margin:0;
+    font-weight:700;
+    font-size:clamp(30px,5.2vw,50px);
+    line-height:1.03;
+    letter-spacing:.02em;
+    text-transform:uppercase;
+    text-wrap:balance;
+    color:var(--ink);
+    text-shadow:3px 3px 0 var(--danger-dim);
+  }
+  h1 span{color:var(--accent);}
+  .tagline{
+    margin:10px 0 0;
+    font-size:14.5px;
+    color:var(--ink-dim);
+    letter-spacing:.03em;
+    max-width:58ch;
+    line-height:1.5;
+  }
+  .hazard-strip{
+    height:6px;
+    margin-top:16px;
+    background:repeating-linear-gradient(45deg, var(--accent) 0 12px, #14150f 12px 24px);
+  }
+
+  .briefing-label{
+    font-family:'Share Tech Mono',monospace;
+    font-size:11px; letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-faint);
+    margin:0 0 12px 2px;
+  }
+  .briefing-label b{color:var(--accent); font-weight:400;}
+
+  .options{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:16px;
+    margin-bottom:24px;
+  }
+  @media (max-width:760px){ .options{grid-template-columns:1fr;} }
+
+  .option{
+    display:flex;
+    flex-direction:column;
+    border:1px solid var(--line);
+    background:var(--panel);
+    text-decoration:none;
+    color:var(--ink);
+    overflow:hidden;
+    transition:border-color .15s, transform .12s, box-shadow .15s;
+  }
+  .option:hover, .option:focus-visible{
+    border-color:var(--accent);
+    transform:translateY(-2px);
+    box-shadow:0 10px 26px -12px rgba(0,0,0,.7);
+    outline:none;
+  }
+  .option:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  .option-view{
+    position:relative;
+    aspect-ratio:16/10;
+    background:#0c0d08;
+    overflow:hidden;
+    border-bottom:1px solid var(--line-soft);
+  }
+  .option-view svg{ width:100%; height:100%; display:block; }
+  .option-view .corner{
+    position:absolute; width:14px;height:14px;
+    border:2px solid var(--accent); opacity:.8; pointer-events:none;
+  }
+  .option-view .corner.tl{top:6px;left:6px;border-right:none;border-bottom:none;}
+  .option-view .corner.tr{top:6px;right:6px;border-left:none;border-bottom:none;}
+  .option-view .corner.bl{bottom:6px;left:6px;border-right:none;border-top:none;}
+  .option-view .corner.br{bottom:6px;right:6px;border-left:none;border-top:none;}
+  .option-view .tag{
+    position:absolute; left:8px; bottom:8px;
+    font-family:'Share Tech Mono',monospace; font-size:10px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--ink-dim);
+    background:rgba(10,9,5,.7); padding:3px 7px; border:1px solid var(--line-soft);
+  }
+
+  .option-body{ padding:14px 16px 16px; flex:1; display:flex; flex-direction:column; gap:8px; }
+  .option-name{
+    font-size:19px; font-weight:600; letter-spacing:.02em; text-transform:uppercase;
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+  }
+  .option-name .key-hint{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:18px; height:18px; border:1px solid var(--line); color:var(--ink-faint);
+    font-family:'Share Tech Mono',monospace; font-size:10px; flex:none;
+  }
+  .option-desc{ font-size:12.5px; color:var(--ink-dim); line-height:1.5; }
+  .option-cta{
+    margin-top:auto;
+    font-family:'Share Tech Mono',monospace; font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--accent);
+    display:flex; align-items:center; gap:6px;
+  }
+  .option-cta::after{ content:"→"; transition:transform .12s; }
+  .option:hover .option-cta::after{ transform:translateX(4px); }
+
+  footer.credits{
+    margin-top:8px;
+    text-align:center;
+    font-size:10.5px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    font-family:'Share Tech Mono',monospace;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="broadcast">
+    <div class="broadcast-row">
+      <span class="live-dot"><i></i>Transmissão ao vivo</span>
+      <span>Rede Federal de Notícias — Setor Klendathu</span>
+      <span>Central de Operações</span>
+    </div>
+    <div class="broadcast-main">
+      <div class="broadcast-text">
+        <h1>Tropas <span>Estelares</span><br>Linha de Defesa</h1>
+        <p class="tagline">Escolha seu posto de comando. Duas visões táticas do mesmo campo de batalha — a mecânica de defesa é idêntica, o que muda é o ângulo de onde você comanda o setor.</p>
+      </div>
+      <div class="emblem">
+        <svg viewBox="0 0 100 100" width="84" height="84" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="45" fill="none" stroke="#f0b400" stroke-width="3"/>
+          <polygon points="50,7 61,38 96,38 68,59 79,90 50,71 21,90 32,59 4,38 39,38" fill="#f0b400" opacity="0.92"/>
+          <g fill="#0d0c08">
+            <ellipse cx="50" cy="53" rx="11" ry="7"/>
+            <ellipse cx="50" cy="43" rx="6" ry="5"/>
+          </g>
+          <g stroke="#0d0c08" stroke-width="2.6" fill="none" stroke-linecap="round">
+            <line x1="41" y1="50" x2="27" y2="41"/>
+            <line x1="41" y1="55" x2="27" y2="64"/>
+            <line x1="59" y1="50" x2="73" y2="41"/>
+            <line x1="59" y1="55" x2="73" y2="64"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+    <div class="hazard-strip"></div>
+  </div>
+
+  <p class="briefing-label">Selecione a <b>visão tática</b> antes do desembarque</p>
+
+  <div class="options">
+
+    <a class="option" href="iso.html">
+      <div class="option-view">
+        <svg viewBox="0 0 400 250" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
+          <rect width="400" height="250" fill="#171710"/>
+          <g transform="translate(200,15)">
+            <polygon points="0,60 130,120 0,180 -130,120" fill="#2a2b1e" stroke="#44462f" stroke-width="1"/>
+            <g stroke="#3a3c28" stroke-width="1" opacity="0.7">
+              <line x1="-130" y1="120" x2="0" y2="60"/><line x1="-97" y1="138" x2="33" y2="78"/>
+              <line x1="-65" y1="156" x2="65" y2="96"/><line x1="-32" y1="174" x2="98" y2="114"/>
+              <line x1="130" y1="120" x2="0" y2="60"/><line x1="97" y1="138" x2="-33" y2="78"/>
+              <line x1="65" y1="156" x2="-65" y2="96"/><line x1="32" y1="174" x2="-98" y2="114"/>
+            </g>
+            <polygon points="-90,105 -40,80 10,95 -20,130 -70,135" fill="#f0b400" opacity="0.85"/>
+            <polyline points="-125,122 -70,110 -70,135 -20,130 -20,95 40,110 90,95" fill="none" stroke="#7a755c" stroke-width="3" stroke-dasharray="1 7" stroke-linecap="round"/>
+            <ellipse cx="10" cy="95" rx="16" ry="9" fill="#14150f" stroke="#f0b400" stroke-width="1.5"/>
+            <polygon points="10,80 4,86 16,86" fill="#f0b400"/>
+            <polygon points="-40,90 -34,74 -46,74" fill="#4a4b32"/>
+            <polygon points="60,105 66,89 54,89" fill="#4a4b32"/>
+          </g>
+        </svg>
+        <div class="corner tl"></div><div class="corner tr"></div>
+        <div class="corner bl"></div><div class="corner br"></div>
+        <span class="tag">Câmera angulada · 3D</span>
+      </div>
+      <div class="option-body">
+        <div class="option-name">Visão Isométrica<span class="key-hint">1</span></div>
+        <p class="option-desc">Perspectiva de comando em ângulo, com profundidade total do terreno e das unidades. Mira e construção por clique direto no setor.</p>
+        <span class="option-cta">Embarcar nesta visão</span>
+      </div>
+    </a>
+
+    <a class="option" href="topdown.html">
+      <div class="option-view">
+        <svg viewBox="0 0 400 250" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
+          <rect width="400" height="250" fill="#171710"/>
+          <g>
+            <rect x="10" y="10" width="380" height="230" fill="#2a2b1e" stroke="#44462f" stroke-width="1"/>
+            <g stroke="#3a3c28" stroke-width="1">
+              <line x1="60" y1="10" x2="60" y2="240"/><line x1="110" y1="10" x2="110" y2="240"/>
+              <line x1="160" y1="10" x2="160" y2="240"/><line x1="210" y1="10" x2="210" y2="240"/>
+              <line x1="260" y1="10" x2="260" y2="240"/><line x1="310" y1="10" x2="310" y2="240"/>
+              <line x1="360" y1="10" x2="360" y2="240"/>
+              <line x1="10" y1="55" x2="390" y2="55"/><line x1="10" y1="100" x2="390" y2="100"/>
+              <line x1="10" y1="145" x2="390" y2="145"/><line x1="10" y1="190" x2="390" y2="190"/>
+            </g>
+            <rect x="150" y="90" width="90" height="70" fill="#f0b400" opacity="0.85"/>
+            <polyline points="10,55 110,55 110,190 210,190 210,55 310,55 310,190 360,190 360,120 180,120" fill="none" stroke="#7a755c" stroke-width="4" stroke-dasharray="1 8" stroke-linecap="round"/>
+            <circle cx="180" cy="125" r="18" fill="#14150f" stroke="#f0b400" stroke-width="1.5"/>
+            <polygon points="180,113 174,121 186,121" fill="#f0b400"/>
+            <rect x="70" y="65" width="12" height="12" fill="#4a4b32"/>
+            <rect x="280" y="160" width="12" height="12" fill="#4a4b32"/>
+          </g>
+        </svg>
+        <div class="corner tl"></div><div class="corner tr"></div>
+        <div class="corner bl"></div><div class="corner br"></div>
+        <span class="tag">Câmera vertical · 3D</span>
+      </div>
+      <div class="option-body">
+        <div class="option-name">Vista de Cima<span class="key-hint">2</span></div>
+        <p class="option-desc">Leitura total do tabuleiro direto de cima, com relevo e sombras em 3D. Ideal para planejar o cerco antes de cada onda.</p>
+        <span class="option-cta">Embarcar nesta visão</span>
+      </div>
+    </a>
+
+  </div>
+
+  <footer class="credits">Serviço Federal · Divisão de Infantaria Móvel · "Você gostaria de saber mais?"</footer>
+</div>
+
+<script>
+  document.addEventListener("keydown", function(ev){
+    if(ev.key==="1") window.location.href="iso.html";
+    if(ev.key==="2") window.location.href="topdown.html";
+  });
+</script>
+</body>
+</html>

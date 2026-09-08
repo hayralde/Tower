@@ -1,0 +1,1882 @@
+<title>Linha de Defesa Klendathu (Vista de Cima)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Share+Tech+Mono&display=swap">
+<style>
+  :root{
+    --bg:#0d0c08;
+    --bg-2:#171710;
+    --panel:#1b1c13;
+    --panel-2:#242519;
+    --line:#44462f;
+    --line-soft:#2c2d1e;
+    --ink:#f0ead2;
+    --ink-dim:#b3ad8f;
+    --ink-faint:#7a755c;
+    --accent:#f0b400;
+    --accent-ink:#1a1608;
+    --danger:#d13a26;
+    --danger-dim:#7a2015;
+    --good:#9dc24c;
+    --steel:#8891a0;
+    --chitin:#7a4a26;
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Oswald',"Arial Narrow",sans-serif;
+    font-weight:400;
+    position:relative;
+  }
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background-image:radial-gradient(rgba(255,255,255,.07) 1px, transparent 1px);
+    background-size:3px 3px;
+    opacity:.4;
+    pointer-events:none;
+    z-index:0;
+  }
+
+  .app{
+    position:relative;
+    z-index:1;
+    max-width:1320px;
+    margin:0 auto;
+    padding:18px 18px 40px;
+  }
+
+  /* ---------- broadcast header ---------- */
+  .broadcast{
+    border:1px solid var(--line);
+    background:linear-gradient(180deg,var(--bg-2),var(--panel));
+    padding:14px 20px 16px;
+    margin-bottom:14px;
+    position:relative;
+  }
+  .broadcast::before{
+    content:"";
+    position:absolute; inset:0;
+    border:1px solid var(--line-soft);
+    margin:3px;
+    pointer-events:none;
+  }
+  .broadcast-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    font-family:'Share Tech Mono',monospace;
+    font-size:11px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--ink-dim);
+    margin-bottom:12px;
+  }
+  .live-dot{
+    display:inline-flex; align-items:center; gap:6px; color:var(--danger);
+  }
+  .live-dot i{
+    width:8px;height:8px;border-radius:50%;background:var(--danger);
+    box-shadow:0 0 8px var(--danger);
+    animation:blink 1.4s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion:reduce){ .live-dot i{animation:none;} }
+  @keyframes blink{0%,100%{opacity:1;}50%{opacity:.25;}}
+
+  .broadcast-main{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:22px;
+  }
+  .broadcast-text{flex:1; min-width:0;}
+  .emblem{flex:none; opacity:.96;}
+  @media (max-width:600px){ .emblem{display:none;} }
+
+  h1{
+    margin:0;
+    font-family:'Oswald',sans-serif;
+    font-weight:700;
+    font-size:clamp(28px,4.6vw,46px);
+    line-height:1.04;
+    letter-spacing:.02em;
+    text-transform:uppercase;
+    text-wrap:balance;
+    color:var(--ink);
+    text-shadow:3px 3px 0 var(--danger-dim);
+  }
+  h1 span{color:var(--accent);}
+  .tagline{
+    margin:8px 0 0;
+    font-size:14px;
+    color:var(--ink-dim);
+    letter-spacing:.03em;
+    max-width:56ch;
+  }
+  .hazard-strip{
+    height:6px;
+    margin-top:14px;
+    background:repeating-linear-gradient(45deg, var(--accent) 0 12px, #14150f 12px 24px);
+  }
+
+  /* ---------- layout ---------- */
+  .layout{
+    display:grid;
+    grid-template-columns:1fr 300px;
+    gap:14px;
+    align-items:start;
+  }
+  @media (max-width:860px){
+    .layout{grid-template-columns:1fr;}
+  }
+
+  /* ---------- viewscreen ---------- */
+  .viewscreen-wrap{
+    position:relative;
+    border:1px solid var(--line);
+    background:var(--panel);
+    padding:10px;
+  }
+  .hud-strip{
+    display:flex;
+    flex-wrap:wrap;
+    gap:0;
+    border:1px solid var(--line-soft);
+    background:var(--bg-2);
+    margin-bottom:8px;
+  }
+  .hud-cell{
+    flex:1 1 auto;
+    padding:7px 12px;
+    border-right:1px solid var(--line-soft);
+    font-family:'Share Tech Mono',monospace;
+  }
+  .hud-cell:last-child{border-right:none;}
+  .hud-label{
+    display:block;
+    font-size:9px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    margin-bottom:2px;
+  }
+  .hud-value{
+    font-size:16px;
+    font-variant-numeric:tabular-nums;
+    color:var(--ink);
+  }
+  .hud-value.money{color:var(--good);}
+  .hud-value.lives{color:var(--danger);}
+  .hud-value.wave{color:var(--accent);}
+
+  .hud-controls{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    align-items:center;
+    padding:6px 8px;
+  }
+
+  .btn{
+    font-family:'Oswald',sans-serif;
+    font-weight:600;
+    font-size:12px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    background:var(--panel-2);
+    color:var(--ink);
+    border:1px solid var(--line);
+    padding:8px 12px;
+    min-height:38px;
+    cursor:pointer;
+    touch-action:manipulation;
+    -webkit-tap-highlight-color:transparent;
+    transition:background .12s, border-color .12s, transform .05s;
+  }
+  .btn:hover{border-color:var(--steel); background:#2c2f1f;}
+  .btn:active{transform:translateY(1px);}
+  .btn:focus-visible{outline:2px solid var(--accent); outline-offset:1px;}
+  .btn.primary{
+    background:var(--accent);
+    color:var(--accent-ink);
+    border-color:var(--accent);
+  }
+  .btn.primary:hover{background:#ffc93c;}
+  .btn.primary:disabled{
+    background:var(--line-soft); color:var(--ink-faint); border-color:var(--line-soft); cursor:not-allowed;
+  }
+  .btn.danger{background:var(--danger); color:#f9e9e5; border-color:var(--danger);}
+  .btn.danger:hover{background:#e14a35;}
+  .btn.small{padding:7px 9px; font-size:11px; min-height:34px;}
+  .btn.toggled{background:var(--steel); color:#12130d; border-color:var(--steel);}
+
+  .canvas-frame{
+    position:relative;
+    border:1px solid var(--line-soft);
+    background:#0c0d08;
+    aspect-ratio:960/624;
+    overflow:hidden;
+  }
+  canvas{
+    position:absolute; inset:0;
+    display:block;
+    width:100%;
+    height:100%;
+    cursor:crosshair;
+    touch-action:manipulation;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .corner{
+    position:absolute;
+    width:18px;height:18px;
+    border:2px solid var(--accent);
+    opacity:.85;
+    pointer-events:none;
+    z-index:3;
+  }
+  .corner.tl{top:6px;left:6px;border-right:none;border-bottom:none;}
+  .corner.tr{top:6px;right:6px;border-left:none;border-bottom:none;}
+  .corner.bl{bottom:6px;left:6px;border-right:none;border-top:none;}
+  .corner.br{bottom:6px;right:6px;border-left:none;border-top:none;}
+  .scanlines{
+    position:absolute; inset:0;
+    background:repeating-linear-gradient(0deg, rgba(0,0,0,.16) 0 1px, transparent 1px 3px);
+    mix-blend-mode:multiply;
+    pointer-events:none;
+    opacity:.5;
+    z-index:3;
+  }
+  .vignette{
+    position:absolute; inset:0;
+    box-shadow:inset 0 0 70px 18px rgba(0,0,0,.7);
+    pointer-events:none;
+    z-index:3;
+  }
+  .hud-watermark{
+    position:absolute; right:12px; bottom:10px;
+    display:flex; flex-direction:column; align-items:flex-end; gap:1px;
+    font-family:'Share Tech Mono',monospace; font-size:10px; letter-spacing:.06em;
+    color:rgba(240,234,210,.6);
+    text-shadow:0 1px 2px rgba(0,0,0,.9);
+    pointer-events:none;
+    z-index:4;
+  }
+
+  .game-over{
+    position:absolute; inset:0;
+    background:rgba(10,9,5,.92);
+    display:none;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    gap:10px;
+    padding:20px;
+    z-index:5;
+  }
+  .game-over.show{display:flex;}
+  .game-over h2{
+    font-size:clamp(24px,5vw,36px);
+    color:var(--danger);
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    margin:0;
+  }
+  .game-over p{margin:0; color:var(--ink-dim); font-family:'Share Tech Mono',monospace; font-size:13px;}
+  .game-over .stats{display:flex; gap:22px; margin:6px 0;}
+  .game-over .stats div{text-align:center;}
+  .game-over .stats b{display:block; font-family:'Share Tech Mono',monospace; font-size:22px; color:var(--accent);}
+  .game-over .stats span{font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-faint);}
+
+  /* ---------- armory ---------- */
+  .armory{
+    border:1px solid var(--line);
+    background:var(--panel);
+  }
+  .panel-head{
+    padding:9px 12px;
+    background:var(--bg-2);
+    border-bottom:1px solid var(--line);
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--ink-dim);
+    font-weight:600;
+  }
+  .tower-list{
+    display:flex;
+    flex-direction:column;
+  }
+  .tower-card{
+    display:flex;
+    gap:10px;
+    align-items:flex-start;
+    padding:10px 12px;
+    border-bottom:1px solid var(--line-soft);
+    background:transparent;
+    cursor:pointer;
+    touch-action:manipulation;
+    -webkit-tap-highlight-color:transparent;
+    text-align:left;
+    color:var(--ink);
+    font-family:'Oswald',sans-serif;
+    width:100%;
+  }
+  .tower-card:hover{background:var(--panel-2);}
+  .tower-card.active{background:#2e301d; box-shadow:inset 3px 0 0 var(--accent);}
+  .tower-card.disabled{opacity:.42; cursor:not-allowed;}
+  .tower-card .icon{flex:none; width:34px; height:34px;}
+  .tower-card .info{flex:1; min-width:0;}
+  .tower-card .name-row{
+    display:flex; justify-content:space-between; align-items:baseline; gap:6px;
+  }
+  .tower-card .name{font-size:14px; font-weight:600; letter-spacing:.02em;}
+  .tower-card .cost{font-family:'Share Tech Mono',monospace; font-size:13px; color:var(--good);}
+  .tower-card .desc{font-size:11.5px; color:var(--ink-dim); margin-top:2px; line-height:1.35;}
+  .tower-card .stats-row{
+    display:flex; gap:10px; margin-top:4px;
+    font-family:'Share Tech Mono',monospace; font-size:10.5px; color:var(--ink-faint);
+  }
+  .key-hint{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:15px; height:15px; border:1px solid var(--line); color:var(--ink-faint);
+    font-family:'Share Tech Mono',monospace; font-size:9px; margin-right:6px; flex:none;
+  }
+
+  .bestiary-list{display:flex; flex-direction:column;}
+  .bestiary-row{
+    display:flex; gap:10px; align-items:flex-start;
+    padding:9px 12px; border-bottom:1px solid var(--line-soft);
+  }
+  .bestiary-row:last-child{border-bottom:none;}
+  .bestiary-dot{
+    width:13px;height:13px;border-radius:50%;flex:none;margin-top:4px;
+    border:1px solid rgba(0,0,0,.4);
+  }
+  .bestiary-info{display:flex; flex-direction:column; gap:3px;}
+  .bestiary-info .name{font-size:13px; font-weight:600; letter-spacing:.02em;}
+  .bestiary-info .meta{font-family:'Share Tech Mono',monospace; font-size:10px; color:var(--ink-faint);}
+  .trait-chip{
+    display:inline-block; align-self:flex-start;
+    font-family:'Share Tech Mono',monospace; font-size:9.5px; letter-spacing:.02em;
+    padding:2px 6px; border:1px solid var(--line); color:var(--ink-dim); background:var(--bg-2);
+  }
+
+  .selected-panel{
+    border-top:1px solid var(--line);
+    padding:12px;
+    background:var(--panel-2);
+  }
+  .selected-panel h3{
+    margin:0 0 6px; font-size:14px; letter-spacing:.05em; text-transform:uppercase; color:var(--accent);
+  }
+  .selected-panel .row{
+    display:flex; justify-content:space-between;
+    font-family:'Share Tech Mono',monospace; font-size:12px;
+    color:var(--ink-dim);
+    padding:2px 0;
+  }
+  .selected-panel .row b{color:var(--ink); font-weight:400;}
+  .selected-actions{display:flex; gap:8px; margin-top:8px;}
+  .selected-actions .btn{flex:1;}
+
+  .log-panel{
+    border-top:1px solid var(--line);
+  }
+  .log-list{
+    list-style:none; margin:0; padding:8px 12px;
+    display:flex; flex-direction:column; gap:5px;
+    max-height:150px; overflow-y:auto;
+    font-family:'Share Tech Mono',monospace;
+    font-size:11px;
+  }
+  .log-list li{color:var(--ink-dim); line-height:1.4;}
+  .log-list li.good{color:var(--good);}
+  .log-list li.danger{color:var(--danger);}
+  .log-list li.info{color:var(--accent);}
+  .log-list li::before{content:"› "; color:var(--ink-faint);}
+
+  footer.credits{
+    margin-top:14px;
+    text-align:center;
+    font-size:10.5px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    font-family:'Share Tech Mono',monospace;
+  }
+
+  /* ---------- phone tuning (after base rules so it wins the cascade) ---------- */
+  @media (max-width:520px){
+    .app{padding:10px 10px 28px;}
+    .broadcast{padding:10px 14px 12px;}
+    .broadcast-row{font-size:9.5px;}
+    .tagline{font-size:12px; max-width:none;}
+    .hud-strip{font-size:11px;}
+    .hud-cell{padding:6px 8px; flex:1 1 40%;}
+    .hud-controls{width:100%; padding:8px;}
+    .hud-controls .btn{flex:1 1 auto;}
+    .tower-card{padding:10px;}
+    .tower-card .desc{display:none;}
+  }
+</style>
+
+<div class="app">
+
+  <div class="broadcast">
+    <div class="broadcast-row">
+      <span class="live-dot"><i></i>Transmissão ao vivo</span>
+      <span>Rede Federal de Notícias — Setor Klendathu</span>
+      <span>Build <span id="build-tag-top">3.0</span></span>
+    </div>
+    <div class="broadcast-main">
+      <div class="broadcast-text">
+        <h1>Tropas <span>Estelares</span><br>Linha de Defesa</h1>
+        <p class="tagline">Contenha o enxame Arachnid no perímetro antes que a colmeia rompa. O Serviço Federal conta com você. (Versão vista de cima)</p>
+      </div>
+      <div class="emblem">
+        <svg viewBox="0 0 100 100" width="84" height="84" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="50" cy="50" r="45" fill="none" stroke="#f0b400" stroke-width="3"/>
+          <polygon points="50,7 61,38 96,38 68,59 79,90 50,71 21,90 32,59 4,38 39,38" fill="#f0b400" opacity="0.92"/>
+          <g fill="#0d0c08">
+            <ellipse cx="50" cy="53" rx="11" ry="7"/>
+            <ellipse cx="50" cy="43" rx="6" ry="5"/>
+          </g>
+          <g stroke="#0d0c08" stroke-width="2.6" fill="none" stroke-linecap="round">
+            <line x1="41" y1="50" x2="27" y2="41"/>
+            <line x1="41" y1="55" x2="27" y2="64"/>
+            <line x1="59" y1="50" x2="73" y2="41"/>
+            <line x1="59" y1="55" x2="73" y2="64"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+    <div class="hazard-strip"></div>
+  </div>
+
+  <div class="layout">
+
+    <!-- VIEWSCREEN -->
+    <div class="viewscreen-wrap">
+      <div class="hud-strip">
+        <div class="hud-cell">
+          <span class="hud-label">Créditos</span>
+          <span class="hud-value money" id="hud-money">150</span>
+        </div>
+        <div class="hud-cell">
+          <span class="hud-label">Perímetro</span>
+          <span class="hud-value lives" id="hud-lives">20</span>
+        </div>
+        <div class="hud-cell">
+          <span class="hud-label">Onda</span>
+          <span class="hud-value wave" id="hud-wave">0</span>
+        </div>
+        <div class="hud-cell">
+          <span class="hud-label">Status</span>
+          <span class="hud-value" id="hud-status" style="font-size:13px;">Aguardando ordens</span>
+        </div>
+        <div class="hud-controls">
+          <button class="btn primary small" id="btn-start">Iniciar Onda</button>
+          <button class="btn small" id="btn-pause">Pausar</button>
+          <button class="btn small" id="btn-speed">Vel. x1</button>
+          <button class="btn small" id="btn-report" title="Envia um relatório desta partida ao QG (para calibragem)">Relatório</button>
+        </div>
+      </div>
+
+      <div class="canvas-frame" id="frame">
+        <canvas id="game" width="960" height="624" style="z-index:1;"></canvas>
+        <canvas id="overlay" width="960" height="624" style="z-index:2;"></canvas>
+        <div class="corner tl"></div><div class="corner tr"></div>
+        <div class="corner bl"></div><div class="corner br"></div>
+        <div class="scanlines"></div>
+        <div class="vignette"></div>
+        <div class="hud-watermark">
+          <span id="wm-build">BUILD</span>
+          <span id="wm-code">REL —</span>
+        </div>
+
+        <div class="game-over" id="game-over">
+          <h2>Perímetro Rompido</h2>
+          <p>A colmeia atravessou a linha de defesa.</p>
+          <div class="stats">
+            <div><b id="go-wave">0</b><span>Onda alcançada</span></div>
+            <div><b id="go-kills">0</b><span>Bugs abatidos</span></div>
+          </div>
+          <button class="btn danger" id="btn-restart">Reiniciar Operação</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ARMORY -->
+    <div>
+      <div class="armory selected-panel" id="selected-panel" style="display:none;"></div>
+
+      <div class="armory" style="margin-top:14px;">
+        <div class="panel-head">Arsenal de Infantaria</div>
+        <div class="tower-list" id="tower-list"></div>
+        <div style="padding:8px 12px; font-size:10.5px; color:var(--ink-faint); font-family:'Share Tech Mono',monospace; border-top:1px solid var(--line-soft);">Clique numa torre já instalada no mapa para melhorar ou vender.</div>
+      </div>
+
+      <div class="armory" style="margin-top:14px;">
+        <div class="panel-head">Inteligência de Campo</div>
+        <div class="bestiary-list">
+          <div class="bestiary-row">
+            <span class="bestiary-dot" style="background:#8a6d3b;"></span>
+            <span class="bestiary-info">
+              <span class="name">Bug Guerreiro</span>
+              <span class="meta">HP baixo · Vel. média</span>
+              <span class="trait-chip">Sem defesas — ótimo alvo de metralhadora</span>
+            </span>
+          </div>
+          <div class="bestiary-row">
+            <span class="bestiary-dot" style="background:#a3b34a;"></span>
+            <span class="bestiary-info">
+              <span class="name">Bug Saltador</span>
+              <span class="meta">HP baixo · Vel. alta</span>
+              <span class="trait-chip">Evasivo — esquiva de balas</span>
+            </span>
+          </div>
+          <div class="bestiary-row">
+            <span class="bestiary-dot" style="background:#4f5d3a;"></span>
+            <span class="bestiary-info">
+              <span class="name">Bug Tanque</span>
+              <span class="meta">HP alto · Vel. baixa</span>
+              <span class="trait-chip">Blindado — resiste bala/estilhaço</span>
+            </span>
+          </div>
+          <div class="bestiary-row">
+            <span class="bestiary-dot" style="background:#8b5fc7;"></span>
+            <span class="bestiary-info">
+              <span class="name">Bug Cérebro</span>
+              <span class="meta">HP altíssimo · Chefe de onda</span>
+              <span class="trait-chip">Blindado — alvo do Strike Orbital</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="armory log-panel" style="margin-top:14px;">
+        <div class="panel-head">Transmissão de Campo</div>
+        <ul class="log-list" id="log-list"></ul>
+      </div>
+    </div>
+
+  </div>
+
+  <footer class="credits">Serviço Federal · Divisão de Infantaria Móvel · "Você gostaria de saber mais?" · Build <span id="build-tag">3.0</span></footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  // ---------------- config ----------------
+  var GAME_VERSION="3.0-TOP";
+  var TILE=48, COLS=20, ROWS=13;
+  var CW=TILE*COLS, CH=TILE*ROWS;
+
+  var WAY_TILES=[[-1,2],[3,2],[3,11],[8,11],[8,2],[13,2],[13,11],[18,11],[18,6],[10,6]];
+  var BASE_TILE=WAY_TILES[WAY_TILES.length-1];
+  var path=WAY_TILES.map(function(p){return [p[0]*TILE+TILE/2, p[1]*TILE+TILE/2];});
+
+  var TOWER_ORDER=["gunner","heavy","flame","rocket","orbital"];
+  var TOWERS={
+    gunner:{id:"gunner",name:"Posto MI-9",desc:"Metralhadora de infantaria. Cadência altíssima contra enxames leves — mas a bala perde força contra carapaça blindada.",cost:55,range:130,rate:220,damage:7,kind:"bullet",color:"#cdbf7a"},
+    heavy:{id:"heavy",name:"Canhão Morita",desc:"Artilharia com estilhaço. Dano cheio no alvo, metade nos vizinhos. Perfura parte da blindagem inimiga.",cost:120,range:170,rate:650,damage:22,splash:30,kind:"shell",color:"#8a95a3"},
+    flame:{id:"flame",name:"Lança-Chamas TX-7",desc:"Jato contínuo que ignora blindagem e prioriza os alvos mais resistentes — atinge no máximo 4 por vez.",cost:95,range:100,rate:1,damage:26,kind:"flame",color:"#e8622a"},
+    rocket:{id:"rocket",name:"Bateria Y-Rex",desc:"Mísseis de fragmentação. Dano cheio no alvo, metade nos vizinhos. Explosivo — ignora blindagem por completo.",cost:190,range:190,rate:1100,damage:46,splash:50,kind:"rocket",color:"#c0392b"},
+    orbital:{id:"orbital",name:"Strike Orbital",desc:"Bombardeio que ignora toda blindagem e sempre mira o alvo mais resistente do setor.",cost:360,range:9999,rate:7000,damage:240,splash:90,kind:"orbital",color:"#f4d35e"}
+  };
+  var UPGRADE_MULT=0.78, MAX_LEVEL=3;
+  var PER_LEVEL={damage:0.55, range:0.14};
+  var COST_ESCALATION=0.12;
+  var SPLASH_FALLOFF=0.55;
+  var TARGET_MODES=["first","strongest","nearest"];
+  var TARGET_MODE_LABEL={first:"Primeiro da fila",strongest:"Mais resistente",nearest:"Mais próximo"};
+  var KIND_TO_TYPE={bullet:"gunner",shell:"heavy",flame:"flame",rocket:"rocket",orbital:"orbital"};
+
+  var ENEMIES={
+    warrior:{name:"Bug Guerreiro",hp:30,speed:54,reward:3,radius:12,color:"#8a6d3b",dmg:1,armorPct:0,evasion:0},
+    hopper:{name:"Bug Saltador",hp:20,speed:96,reward:4,radius:10,color:"#a3b34a",dmg:1,armorPct:0,evasion:0.3},
+    tanker:{name:"Bug Tanque",hp:210,speed:29,reward:9,radius:17,color:"#4f5d3a",dmg:2,armorPct:0.45,evasion:0},
+    brain:{name:"Bug Cérebro",hp:950,speed:21,reward:65,radius:24,color:"#8b5fc7",dmg:5,armorPct:0.6,evasion:0}
+  };
+
+  // ---------------- grid & path ----------------
+  var buildable=[]; for(var r=0;r<ROWS;r++){buildable.push(new Array(COLS).fill(true));}
+  (function markPath(){
+    for(var i=0;i<path.length-1;i++){
+      var x1=path[i][0],y1=path[i][1],x2=path[i+1][0],y2=path[i+1][1];
+      var dist=Math.hypot(x2-x1,y2-y1), steps=Math.max(1,Math.ceil(dist/6));
+      for(var s=0;s<=steps;s++){
+        var t=s/steps, x=x1+(x2-x1)*t, y=y1+(y2-y1)*t;
+        var col=Math.floor(x/TILE), row=Math.floor(y/TILE);
+        if(col>=0&&col<COLS&&row>=0&&row<ROWS) buildable[row][col]=false;
+      }
+    }
+  })();
+
+  function tileHash(c,r){
+    var x=Math.sin(c*127.1+r*311.7)*43758.5453;
+    return x-Math.floor(x);
+  }
+
+  // ---------------- state ----------------
+  var towerGrid=new Map();
+  var state={
+    money:150, lives:20, wave:0, killCount:0,
+    waveActive:false, betweenTimer:5000, spawnQueue:[], spawnTimer:0,
+    armedType:null, selectedTower:null, paused:false, speedMult:1, gameOver:false,
+    damageByType:{gunner:0,heavy:0,flame:0,rocket:0,orbital:0},
+    builtByType:{gunner:0,heavy:0,flame:0,rocket:0,orbital:0},
+    leaksByType:{warrior:0,hopper:0,tanker:0,brain:0},
+    evasions:0, waveHistory:[], startedAt:Date.now()
+  };
+  var dbApi=null;
+  var enemies=[], towers=[], projectiles=[], particles=[];
+  var idSeq=1;
+  var hoverCol=-1, hoverRow=-1;
+  var screenShakeT=0, shakeDX=0, shakeDY=0;
+  var orbitalImpact=null;
+
+  var WIND_VX=24, WIND_VY=13;
+  var dustParticles=[], cloudShadows=[];
+  (function initAtmosphere(){
+    for(var i=0;i<50;i++){
+      var depth=Math.random();
+      dustParticles.push({
+        x:Math.random()*CW, y:Math.random()*CH, depth:depth,
+        size:0.6+depth*1.8, alpha:0.05+depth*0.16
+      });
+    }
+    for(var j=0;j<3;j++){
+      cloudShadows.push({
+        x:Math.random()*CW-CW/2, y:Math.random()*CH,
+        rx:150+Math.random()*110, ry:70+Math.random()*50,
+        speed:4+Math.random()*4
+      });
+    }
+  })();
+
+  function updateAtmosphere(dt){
+    dustParticles.forEach(function(p){
+      p.x+=WIND_VX*(0.4+p.depth*0.9)*dt;
+      p.y+=WIND_VY*(0.4+p.depth*0.9)*dt;
+      if(p.x>CW+10){ p.x=-10; p.y=Math.random()*CH; }
+      if(p.y>CH+10){ p.y=-10; p.x=Math.random()*CW; }
+    });
+    cloudShadows.forEach(function(cs){
+      cs.x+=cs.speed*dt;
+      if(cs.x-cs.rx>CW){ cs.x=-cs.rx; cs.y=Math.random()*CH; }
+    });
+    if(screenShakeT>0){
+      screenShakeT=Math.max(0,screenShakeT-dt);
+      var mag=6*(screenShakeT/0.25);
+      shakeDX=(Math.random()-0.5)*mag;
+      shakeDY=(Math.random()-0.5)*mag;
+    } else { shakeDX=0; shakeDY=0; }
+    if(orbitalImpact){
+      orbitalImpact.life-=dt;
+      if(orbitalImpact.life<=0) orbitalImpact=null;
+    }
+  }
+
+  // ---------------- dom ----------------
+  var canvas3d=document.getElementById("game");
+  var canvasOverlay=document.getElementById("overlay");
+  var canvas=canvasOverlay; // input target
+  var ctx=canvasOverlay.getContext("2d");
+  var DPR=Math.min(window.devicePixelRatio||1,2);
+  canvasOverlay.width=CW*DPR; canvasOverlay.height=CH*DPR;
+  ctx.scale(DPR,DPR);
+
+  var elMoney=document.getElementById("hud-money");
+  var elLives=document.getElementById("hud-lives");
+  var elWave=document.getElementById("hud-wave");
+  var elStatus=document.getElementById("hud-status");
+  var elTowerList=document.getElementById("tower-list");
+  var elSelPanel=document.getElementById("selected-panel");
+  var elLog=document.getElementById("log-list");
+  var elGameOver=document.getElementById("game-over");
+  var elGoWave=document.getElementById("go-wave");
+  var elGoKills=document.getElementById("go-kills");
+  var btnStart=document.getElementById("btn-start");
+  var btnPause=document.getElementById("btn-pause");
+  var btnSpeed=document.getElementById("btn-speed");
+  var btnRestart=document.getElementById("btn-restart");
+  var btnReport=document.getElementById("btn-report");
+  var elWmBuild=document.getElementById("wm-build");
+  var elWmCode=document.getElementById("wm-code");
+  document.getElementById("build-tag-top").textContent=GAME_VERSION;
+  document.getElementById("build-tag").textContent=GAME_VERSION;
+  elWmBuild.textContent="BUILD "+GAME_VERSION;
+
+  // ---------------- economy ----------------
+  function typeCount(typeId){
+    var n=0;
+    for(var i=0;i<towers.length;i++){ if(towers[i].typeId===typeId) n++; }
+    return n;
+  }
+  function currentCost(typeId){
+    var base=TOWERS[typeId].cost;
+    return Math.round(base*(1+typeCount(typeId)*COST_ESCALATION));
+  }
+
+  // ---------------- icons ----------------
+  function svgIcon(kind,color){
+    var base='<svg viewBox="0 0 34 34" width="34" height="34" xmlns="http://www.w3.org/2000/svg">'+
+      '<rect x="4" y="4" width="26" height="26" fill="#14150f" stroke="'+color+'" stroke-width="1.5"/>';
+    var mid='';
+    if(kind==="gunner"){ mid='<circle cx="17" cy="17" r="6" fill="'+color+'"/><rect x="16" y="4" width="2" height="10" fill="'+color+'"/>'; }
+    else if(kind==="heavy"){ mid='<rect x="10" y="12" width="14" height="10" fill="'+color+'"/><rect x="15" y="4" width="4" height="10" fill="'+color+'"/>'; }
+    else if(kind==="flame"){ mid='<path d="M17 6 C11 14, 13 18, 17 26 C21 18, 23 14, 17 6 Z" fill="'+color+'"/>'; }
+    else if(kind==="rocket"){ mid='<rect x="10" y="14" width="6" height="9" fill="'+color+'"/><rect x="18" y="14" width="6" height="9" fill="'+color+'"/><rect x="15" y="4" width="4" height="11" fill="'+color+'"/>'; }
+    else { mid='<circle cx="17" cy="17" r="4" fill="'+color+'"/><circle cx="17" cy="17" r="9" fill="none" stroke="'+color+'" stroke-width="1.5"/><circle cx="17" cy="17" r="13" fill="none" stroke="'+color+'" stroke-width="1"/>'; }
+    return base+mid+'</svg>';
+  }
+
+  function buildArmory(){
+    elTowerList.innerHTML="";
+    TOWER_ORDER.forEach(function(id,idx){
+      var t=TOWERS[id];
+      var card=document.createElement("button");
+      card.className="tower-card";
+      card.type="button";
+      card.dataset.id=id;
+      card.innerHTML=
+        '<span class="icon">'+svgIcon(id,t.color)+'</span>'+
+        '<span class="info">'+
+          '<span class="name-row"><span class="name"><span class="key-hint">'+(idx+1)+'</span>'+t.name+'</span><span class="cost">'+t.cost+'¢</span></span>'+
+          '<span class="desc">'+t.desc+'</span>'+
+          '<span class="stats-row"><span>DMG '+t.damage+'</span><span>ALC '+(t.range>999?"∞":t.range)+'</span></span>'+
+        '</span>';
+      card.addEventListener("click",function(){ armTower(id); });
+      elTowerList.appendChild(card);
+    });
+    refreshArmory();
+  }
+  function refreshArmory(){
+    var cards=elTowerList.querySelectorAll(".tower-card");
+    cards.forEach(function(c){
+      var id=c.dataset.id, cost=currentCost(id);
+      c.classList.toggle("active", state.armedType===id);
+      c.classList.toggle("disabled", state.money<cost);
+      var costEl=c.querySelector(".cost");
+      if(costEl) costEl.textContent=cost+"¢";
+    });
+  }
+  function armTower(id){
+    if(state.gameOver) return;
+    state.armedType = (state.armedType===id) ? null : id;
+    state.selectedTower=null;
+    refreshArmory();
+    renderSelectedPanel();
+  }
+
+  // ---------------- log ----------------
+  var logEntries=[];
+  function addLog(text,cls){
+    logEntries.unshift({text:text,cls:cls||""});
+    if(logEntries.length>18) logEntries.pop();
+    elLog.innerHTML=logEntries.map(function(e){
+      return '<li class="'+e.cls+'">'+e.text+'</li>';
+    }).join("");
+  }
+
+  // ---------------- 3D scene ----------------
+  var renderer=new THREE.WebGLRenderer({canvas:canvas3d, antialias:true});
+  renderer.setPixelRatio(DPR);
+  renderer.setSize(CW,CH,false);
+  renderer.shadowMap.enabled=true;
+  renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  if(THREE.sRGBEncoding) renderer.outputEncoding=THREE.sRGBEncoding;
+
+  var scene=new THREE.Scene();
+  scene.background=new THREE.Color(0x0d0c08);
+  scene.fog=new THREE.Fog(0x0d0c08, CW*0.85, CW*1.7);
+
+  var camera=new THREE.OrthographicCamera(-CW/2,CW/2,CH/2,-CH/2,0.1,3000);
+  camera.position.set(CW/2,650,CH/2);
+  camera.up.set(0,0,-1);
+  camera.lookAt(CW/2,0,CH/2);
+
+  scene.add(new THREE.AmbientLight(0x5a5040,0.85));
+  var sunLight=new THREE.DirectionalLight(0xfff2d0,1.15);
+  sunLight.position.set(CW*0.18,520,CH*0.12);
+  sunLight.target.position.set(CW/2,0,CH/2);
+  sunLight.castShadow=true;
+  sunLight.shadow.mapSize.set(1024,1024);
+  sunLight.shadow.camera.left=-CW/2-80;
+  sunLight.shadow.camera.right=CW/2+80;
+  sunLight.shadow.camera.top=CH/2+80;
+  sunLight.shadow.camera.bottom=-CH/2-80;
+  sunLight.shadow.camera.near=10;
+  sunLight.shadow.camera.far=1300;
+  sunLight.shadow.bias=-0.0015;
+  scene.add(sunLight);
+  scene.add(sunLight.target);
+  var fillLight=new THREE.DirectionalLight(0x8fa0c0,0.25);
+  fillLight.position.set(-CW*0.2,300,-CH*0.1);
+  scene.add(fillLight);
+
+  function disposeMesh(mesh){
+    mesh.traverse(function(obj){
+      if(obj.geometry) obj.geometry.dispose();
+      if(obj.material){
+        if(Array.isArray(obj.material)) obj.material.forEach(function(m){ m.dispose(); });
+        else obj.material.dispose();
+      }
+    });
+  }
+
+  function buildTowerMesh(typeId){
+    var def=TOWERS[typeId];
+    var colorHex=parseInt(def.color.slice(1),16);
+    var group=new THREE.Group();
+
+    var base=new THREE.Mesh(
+      new THREE.CylinderGeometry(15,17,10,12),
+      new THREE.MeshStandardMaterial({color:0x14150f, roughness:0.75})
+    );
+    base.position.y=5;
+    base.castShadow=true; base.receiveShadow=true;
+    group.add(base);
+
+    var turret=new THREE.Group();
+    turret.position.y=10;
+    group.add(turret);
+
+    var mat=new THREE.MeshStandardMaterial({color:colorHex, roughness:0.5, metalness:0.2});
+    var darkMat=new THREE.MeshStandardMaterial({color:0x1a1a12, roughness:0.6});
+
+    if(typeId==="gunner"){
+      var recv=new THREE.Mesh(new THREE.SphereGeometry(7,12,10), mat);
+      recv.castShadow=true;
+      turret.add(recv);
+      [-4,4].forEach(function(oz){
+        var barrel=new THREE.Mesh(new THREE.CylinderGeometry(1.6,1.6,20,8), mat);
+        barrel.rotation.z=Math.PI/2;
+        barrel.position.set(12,oz,0);
+        barrel.castShadow=true;
+        turret.add(barrel);
+      });
+    } else if(typeId==="heavy"){
+      var hull=new THREE.Mesh(new THREE.BoxGeometry(15,14,18), mat);
+      hull.position.y=3;
+      hull.castShadow=true;
+      turret.add(hull);
+      var barrel=new THREE.Mesh(new THREE.CylinderGeometry(3,3.4,20,10), darkMat);
+      barrel.rotation.z=Math.PI/2;
+      barrel.position.set(14,3,0);
+      barrel.name="barrel";
+      barrel.castShadow=true;
+      turret.add(barrel);
+    } else if(typeId==="flame"){
+      var tank=new THREE.Mesh(new THREE.CylinderGeometry(6,6,16,10), new THREE.MeshStandardMaterial({color:0x5a5346,roughness:0.85}));
+      tank.rotation.z=Math.PI/2;
+      tank.position.set(-9,2,0);
+      tank.castShadow=true;
+      turret.add(tank);
+      var nozzle=new THREE.Mesh(new THREE.ConeGeometry(6,18,10), mat);
+      nozzle.rotation.z=-Math.PI/2;
+      nozzle.position.set(11,2,0);
+      nozzle.castShadow=true;
+      turret.add(nozzle);
+    } else if(typeId==="rocket"){
+      [-5,5].forEach(function(oz){
+        var tube=new THREE.Mesh(new THREE.CylinderGeometry(3.2,3.2,20,10), mat);
+        tube.rotation.z=Math.PI/2;
+        tube.position.set(11,oz,0);
+        tube.castShadow=true;
+        turret.add(tube);
+      });
+    } else if(typeId==="orbital"){
+      var ring=new THREE.Mesh(new THREE.TorusGeometry(12,2,8,20), mat);
+      ring.rotation.x=Math.PI/2;
+      ring.name="ring";
+      ring.castShadow=true;
+      turret.add(ring);
+      var beacon=new THREE.Mesh(
+        new THREE.SphereGeometry(4,10,10),
+        new THREE.MeshStandardMaterial({color:0xfff6cf, emissive:0xffcf5c, emissiveIntensity:0.7})
+      );
+      turret.add(beacon);
+    }
+
+    group.userData.turret=turret;
+    return group;
+  }
+
+  function buildEnemyMesh(typeId){
+    var def=ENEMIES[typeId];
+    var colorHex=parseInt(def.color.slice(1),16);
+    var r=def.radius;
+    var group=new THREE.Group();
+    var mat=new THREE.MeshStandardMaterial({color:colorHex, roughness:0.65});
+
+    var abdomen=new THREE.Mesh(new THREE.SphereGeometry(r*0.7,10,8), mat);
+    abdomen.scale.set(1.3,0.85,1);
+    abdomen.position.set(-r*0.15,r*0.45,0);
+    abdomen.castShadow=true;
+    group.add(abdomen);
+
+    var head=new THREE.Mesh(new THREE.SphereGeometry(r*0.42,10,8), mat);
+    head.position.set(r*0.55,r*0.45,0);
+    head.castShadow=true;
+    group.add(head);
+
+    var legMat=new THREE.MeshStandardMaterial({color:0x100f0a, roughness:0.7});
+    var legs=[];
+    for(var i=0;i<3;i++){
+      [-1,1].forEach(function(side){
+        var leg=new THREE.Mesh(new THREE.CylinderGeometry(1,1,r*1.1,5), legMat);
+        leg.position.set((i-1)*r*0.5, r*0.3, side*r*0.55);
+        group.add(leg);
+        legs.push({mesh:leg, idx:i, side:side});
+      });
+    }
+    group.userData.legs=legs;
+
+    if(typeId==="brain"){
+      var aura=new THREE.Mesh(
+        new THREE.SphereGeometry(r*1.6,12,10),
+        new THREE.MeshStandardMaterial({color:0x8b5fc7, transparent:true, opacity:0.18, emissive:0x8b5fc7, emissiveIntensity:0.35})
+      );
+      aura.position.y=r*0.45;
+      group.add(aura);
+      group.userData.aura=aura;
+    }
+
+    return group;
+  }
+
+  var towerMeshes=new Map();
+  var enemyMeshes=new Map();
+
+  function syncMeshes(now){
+    if(baseMesh && baseMesh.userData.beacon) baseMesh.userData.beacon.rotation.y=now*0.0009;
+    towers.forEach(function(t){
+      var mesh=towerMeshes.get(t);
+      if(!mesh) return;
+      var turret=mesh.userData.turret;
+      if(t.typeId==="orbital"){
+        turret.rotation.y=now*0.0014;
+      } else {
+        turret.rotation.y=-(t.angle||0);
+        var barrel=turret.getObjectByName("barrel");
+        if(barrel) barrel.position.x=14-(t.recoil||0);
+      }
+    });
+    enemies.forEach(function(e){
+      var mesh=enemyMeshes.get(e.id);
+      if(!mesh) return;
+      mesh.position.set(e.x,0,e.y);
+      mesh.rotation.y=-(e.angle||0);
+      var speedFactor=Math.max(0.5,e.speed/54);
+      var phase=now*0.011*speedFactor+e.id*2.1;
+      mesh.userData.legs.forEach(function(L){
+        var swing=Math.sin(phase+L.idx*1.05+(L.side>0?Math.PI:0));
+        L.mesh.rotation.x=swing*0.5;
+      });
+      if(mesh.userData.aura){
+        var pulse=1+0.08*Math.sin(now*0.004+e.id);
+        mesh.userData.aura.scale.setScalar(pulse);
+      }
+    });
+  }
+
+  // ---------------- entities ----------------
+  function spawnEnemy(typeId,hpMult,spMult,armorGrow,evasionGrow){
+    var t=ENEMIES[typeId];
+    var e={
+      id:idSeq++, type:typeId, x:path[0][0], y:path[0][1], wp:1,
+      hp:Math.round(t.hp*hpMult), maxHp:Math.round(t.hp*hpMult),
+      speed:t.speed*spMult, reward:t.reward, radius:t.radius, color:t.color, dmg:t.dmg,
+      armorPct: t.armorPct>0 ? Math.min(0.82,t.armorPct+armorGrow) : 0,
+      evasion: t.evasion>0 ? Math.min(0.6,t.evasion+evasionGrow) : 0,
+      angle:0
+    };
+    enemies.push(e);
+    var mesh=buildEnemyMesh(typeId);
+    mesh.position.set(e.x,0,e.y);
+    scene.add(mesh);
+    enemyMeshes.set(e.id,mesh);
+  }
+
+  function buildWave(n){
+    var hpMult = n<=20 ? 1+(n-1)*0.22 : (1+19*0.22)*Math.pow(1.07,n-20);
+    var spMult=Math.min(1+(n-1)*0.035,1.7);
+    var armorGrow=Math.min(0.32,(n-1)*0.008);
+    var evasionGrow=Math.min(0.25,(n-1)*0.006);
+    var groups=[];
+    var warriorCount=3+Math.floor(n*1.6);
+    var hopperCount= n>=2 ? 2+Math.floor(n*0.9) : 0;
+    var tankerCount= n>=4 ? 1+Math.floor(n*0.4) : 0;
+    var isBoss = n%5===0;
+    groups.push({type:"warrior",count:warriorCount,gap:480});
+    if(hopperCount) groups.push({type:"hopper",count:hopperCount,gap:340});
+    if(tankerCount) groups.push({type:"tanker",count:tankerCount,gap:850});
+    if(isBoss) groups.push({type:"brain",count:1+Math.floor(n/8),gap:1500});
+    var queue=[];
+    groups.forEach(function(g){
+      for(var i=0;i<g.count;i++) queue.push({type:g.type,gap:g.gap});
+    });
+    return {queue:queue,hpMult:hpMult,spMult:spMult,armorGrow:armorGrow,evasionGrow:evasionGrow,isBoss:isBoss};
+  }
+
+  var currentWaveMult={hp:1,sp:1,armor:0,evasion:0};
+  function startNextWave(){
+    if(state.waveActive||state.gameOver) return;
+    state.wave++;
+    var w=buildWave(state.wave);
+    state.spawnQueue=w.queue;
+    currentWaveMult.hp=w.hpMult; currentWaveMult.sp=w.spMult;
+    currentWaveMult.armor=w.armorGrow; currentWaveMult.evasion=w.evasionGrow;
+    state.waveActive=true;
+    state.spawnTimer=0;
+    state.waveLeaks={warrior:0,hopper:0,tanker:0,brain:0};
+    state.waveSpawned=w.queue.length;
+    addLog("Onda "+state.wave+" detectada"+(w.isBoss?" — ALVO DE ALTO VALOR":"")+".","info");
+  }
+
+  function clearWaveBonus(){
+    var bonus=16+state.wave*3;
+    state.money+=bonus;
+    var leaked=state.waveLeaks.warrior+state.waveLeaks.hopper+state.waveLeaks.tanker+state.waveLeaks.brain;
+    addLog("Onda "+state.wave+" contida. Bônus de suprimento +"+bonus+"¢.","good");
+    state.betweenTimer=5000;
+    state.waveHistory.push({
+      wave:state.wave, moneyAfter:state.money, livesAfter:state.lives,
+      spawned:state.waveSpawned, leaked:leaked, leaksByType:state.waveLeaks,
+      towers:towers.map(function(t){ return {type:t.typeId, level:t.level, col:t.col, row:t.row}; })
+    });
+  }
+
+  function removeEnemyAt(idx,leaked){
+    var e=enemies[idx];
+    var mesh=enemyMeshes.get(e.id);
+    if(mesh){ scene.remove(mesh); disposeMesh(mesh); enemyMeshes.delete(e.id); }
+    enemies.splice(idx,1);
+    if(!leaked){
+      state.money+=e.reward;
+      state.killCount++;
+      spawnBurst(e.x,e.y,e.color,7);
+    }
+  }
+
+  function applyDamage(enemy,rawDmg,kind){
+    if(kind==="bullet" && enemy.evasion>0 && Math.random()<enemy.evasion){
+      state.evasions++;
+      particles.push({x:enemy.x,y:enemy.y-enemy.radius-6,vx:0,vy:-32,life:0.35,maxLife:0.35,color:"#cfd8dc",size:3,ring:true});
+      return;
+    }
+    var dmg=rawDmg;
+    if((kind==="bullet"||kind==="shell") && enemy.armorPct>0){
+      dmg=Math.max(1,dmg*(1-enemy.armorPct));
+    }
+    var trackType=KIND_TO_TYPE[kind];
+    if(trackType) state.damageByType[trackType]+=dmg;
+    enemy.hp-=dmg;
+    if(enemy.hp<=0){
+      var idx=enemies.indexOf(enemy);
+      if(idx>=0){
+        addLog(ENEMIES[enemy.type].name+" abatido (+"+enemy.reward+"¢).","good");
+        removeEnemyAt(idx,false);
+      }
+    }
+  }
+
+  function spawnBurst(x,y,color,n){
+    for(var i=0;i<n;i++){
+      var a=Math.random()*Math.PI*2, sp=40+Math.random()*90;
+      particles.push({x:x,y:y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:0.4,maxLife:0.4,color:color,size:2+Math.random()*2});
+    }
+  }
+  function spawnFlash(x,y,color){
+    particles.push({x:x,y:y,vx:0,vy:0,life:0.28,maxLife:0.28,color:color,size:16,ring:true});
+  }
+
+  // ---------------- towers ----------------
+  function key(c,r){return c+","+r;}
+
+  function buildTower(col,row,typeId){
+    var cost=currentCost(typeId);
+    if(state.money<cost) return;
+    if(!buildable[row][col]) return;
+    if(towerGrid.has(key(col,row))) return;
+    state.money-=cost;
+    var tower={
+      typeId:typeId, col:col,row:row,
+      x:col*TILE+TILE/2, y:row*TILE+TILE/2,
+      level:1, cooldown:0, angle:0, invested:cost, flameTimer:0, recoil:0, mode:"first"
+    };
+    towers.push(tower);
+    towerGrid.set(key(col,row),tower);
+    state.builtByType[typeId]++;
+
+    var mesh=buildTowerMesh(typeId);
+    mesh.position.set(tower.x,0,tower.y);
+    scene.add(mesh);
+    towerMeshes.set(tower,mesh);
+
+    addLog(TOWERS[typeId].name+" instalado no setor "+col+","+row+".","");
+    refreshArmory();
+  }
+
+  function towerStat(tower,field){
+    var base=TOWERS[tower.typeId][field];
+    if(field==="damage") return base*(1+(tower.level-1)*PER_LEVEL.damage);
+    if(field==="range") return base*(1+(tower.level-1)*PER_LEVEL.range);
+    return base;
+  }
+  function upgradeCost(tower){
+    var base=TOWERS[tower.typeId].cost;
+    return Math.round(base*UPGRADE_MULT*tower.level);
+  }
+  function upgradeTower(tower){
+    if(tower.level>=MAX_LEVEL) return;
+    var cost=upgradeCost(tower);
+    if(state.money<cost) return;
+    state.money-=cost;
+    tower.invested+=cost;
+    tower.level++;
+    addLog(TOWERS[tower.typeId].name+" ampliado para nível "+tower.level+".","info");
+    renderSelectedPanel();
+    refreshArmory();
+  }
+  function sellTower(tower){
+    var refund=Math.round(tower.invested*0.6);
+    state.money+=refund;
+    towerGrid.delete(key(tower.col,tower.row));
+    var mesh=towerMeshes.get(tower);
+    if(mesh){ scene.remove(mesh); disposeMesh(mesh); towerMeshes.delete(tower); }
+    var idx=towers.indexOf(tower);
+    if(idx>=0) towers.splice(idx,1);
+    addLog(TOWERS[tower.typeId].name+" desmontado (+"+refund+"¢).","");
+    state.selectedTower=null;
+    renderSelectedPanel();
+    refreshArmory();
+  }
+
+  function findTarget(tower){
+    var range=towerStat(tower,"range");
+    if(tower.typeId==="orbital"){
+      var strongest=null,bestHp=-1;
+      for(var i=0;i<enemies.length;i++){
+        var e=enemies[i];
+        if(Math.hypot(e.x-tower.x,e.y-tower.y)<=range && e.hp>bestHp){ bestHp=e.hp; strongest=e; }
+      }
+      return strongest;
+    }
+    var candidates=[];
+    for(var j=0;j<enemies.length;j++){
+      var en=enemies[j];
+      if(Math.hypot(en.x-tower.x,en.y-tower.y)<=range) candidates.push(en);
+    }
+    if(candidates.length===0) return null;
+    if(tower.mode==="strongest"){
+      return candidates.reduce(function(a,b){ return b.hp>a.hp?b:a; });
+    }
+    if(tower.mode==="nearest"){
+      return candidates.reduce(function(a,b){
+        var da=Math.hypot(a.x-tower.x,a.y-tower.y), db=Math.hypot(b.x-tower.x,b.y-tower.y);
+        return db<da?b:a;
+      });
+    }
+    return candidates.reduce(function(a,b){
+      var pa=a.wp*2000-Math.hypot(path[a.wp][0]-a.x,path[a.wp][1]-a.y);
+      var pb=b.wp*2000-Math.hypot(path[b.wp][0]-b.x,path[b.wp][1]-b.y);
+      return pb>pa?b:a;
+    });
+  }
+
+  function fireTower(tower,dtMs,dt){
+    var def=TOWERS[tower.typeId];
+    tower.recoil=(tower.recoil||0)*0.82;
+
+    if(tower.typeId==="flame"){
+      var range=towerStat(tower,"range");
+      var dps=towerStat(tower,"damage");
+      var inRange=[];
+      for(var i=0;i<enemies.length;i++){
+        var e=enemies[i];
+        var d=Math.hypot(e.x-tower.x,e.y-tower.y);
+        if(d<=range) inRange.push({e:e,d:d});
+      }
+      inRange.sort(function(a,b){ return b.e.hp-a.e.hp; });
+      var capped=inRange.slice(0,4);
+      capped.forEach(function(o){ applyDamage(o.e,dps*dt,"flame"); });
+      tower.flameTimer-=dtMs;
+      if(capped.length>0){
+        tower.angle=Math.atan2(capped[0].e.y-tower.y,capped[0].e.x-tower.x);
+        if(tower.flameTimer<=0){
+          tower.flameTimer=90;
+          var ang=tower.angle;
+          particles.push({x:tower.x+Math.cos(ang)*14,y:tower.y+Math.sin(ang)*14,
+            vx:Math.cos(ang)*70+(Math.random()-0.5)*40, vy:Math.sin(ang)*70+(Math.random()-0.5)*40,
+            life:0.32,maxLife:0.32,color:"#f4923a",size:5});
+        }
+      }
+      return;
+    }
+
+    if(tower.cooldown>0){ tower.cooldown-=dtMs; return; }
+    var target=findTarget(tower);
+    if(!target) return;
+    tower.angle=Math.atan2(target.y-tower.y,target.x-tower.x);
+    tower.cooldown=def.rate;
+
+    if(tower.typeId==="orbital"){
+      spawnFlash(target.x,target.y,"#f4d35e");
+      particles.push({x:target.x,y:target.y-CH,vx:0,vy:900,life:CH/900,maxLife:CH/900,color:"#fff6cf",size:3,beamTo:target.y});
+      var dmg=towerStat(tower,"damage");
+      for(var j=0;j<enemies.length;j++){
+        var e2=enemies[j];
+        if(Math.hypot(e2.x-target.x,e2.y-target.y)<=def.splash) applyDamage(e2,dmg,"orbital");
+      }
+      screenShakeT=0.25;
+      orbitalImpact={x:target.x,y:target.y,life:0.4,maxLife:0.4};
+      addLog("Strike orbital solicitado.","info");
+      return;
+    }
+
+    tower.recoil = def.kind==="shell"?7 : def.kind==="rocket"?6 : 3;
+    var speed = def.kind==="bullet"?420 : def.kind==="shell"?300:220;
+    projectiles.push({
+      x:tower.x,y:tower.y,targetId:target.id,speed:speed,
+      damage:towerStat(tower,"damage"),splash:def.splash||0,kind:def.kind,color:def.color
+    });
+  }
+
+  // ---------------- update ----------------
+  function update(dt){
+    var dtMs=dt*1000;
+
+    if(!state.waveActive){
+      state.betweenTimer-=dtMs;
+      if(state.betweenTimer<=0) startNextWave();
+    } else if(state.spawnQueue.length>0){
+      state.spawnTimer-=dtMs;
+      if(state.spawnTimer<=0){
+        var next=state.spawnQueue.shift();
+        spawnEnemy(next.type,currentWaveMult.hp,currentWaveMult.sp,currentWaveMult.armor,currentWaveMult.evasion);
+        state.spawnTimer=next.gap;
+      }
+    } else if(enemies.length===0){
+      state.waveActive=false;
+      clearWaveBonus();
+    }
+
+    for(var i=enemies.length-1;i>=0;i--){
+      var e=enemies[i];
+      var tgt=path[e.wp];
+      if(!tgt){ removeEnemyAt(i,true); continue; }
+      var dx=tgt[0]-e.x, dy=tgt[1]-e.y, d=Math.hypot(dx,dy);
+      if(d>0.01) e.angle=Math.atan2(dy,dx);
+      var move=e.speed*dt;
+      if(move>=d){
+        e.x=tgt[0]; e.y=tgt[1]; e.wp++;
+        if(e.wp>=path.length){
+          state.lives-=e.dmg;
+          state.leaksByType[e.type]++;
+          state.waveLeaks[e.type]++;
+          addLog("Falha de contenção! "+ENEMIES[e.type].name+" atravessou. -"+e.dmg+" perímetro.","danger");
+          removeEnemyAt(i,true);
+          if(state.lives<=0) triggerGameOver();
+        }
+      } else {
+        e.x+=dx/d*move; e.y+=dy/d*move;
+      }
+    }
+
+    towers.forEach(function(t){ fireTower(t,dtMs,dt); });
+
+    for(var p=projectiles.length-1;p>=0;p--){
+      var pr=projectiles[p];
+      var target=null;
+      for(var k=0;k<enemies.length;k++){ if(enemies[k].id===pr.targetId){target=enemies[k]; break;} }
+      if(!target){ projectiles.splice(p,1); continue; }
+      var ddx=target.x-pr.x, ddy=target.y-pr.y, dd=Math.hypot(ddx,ddy);
+      var mv=pr.speed*dt;
+      if(mv>=dd || dd<6){
+        if(pr.splash>0){
+          applyDamage(target,pr.damage,pr.kind);
+          for(var m=0;m<enemies.length;m++){
+            var en=enemies[m];
+            if(en===target) continue;
+            if(Math.hypot(en.x-target.x,en.y-target.y)<=pr.splash) applyDamage(en,pr.damage*SPLASH_FALLOFF,pr.kind);
+          }
+        } else {
+          applyDamage(target,pr.damage,pr.kind);
+        }
+        spawnBurst(target.x,target.y,pr.color,pr.splash>0?10:4);
+        projectiles.splice(p,1);
+      } else {
+        pr.x+=ddx/dd*mv; pr.y+=ddy/dd*mv;
+      }
+    }
+
+    for(var q=particles.length-1;q>=0;q--){
+      var pt=particles[q];
+      pt.life-=dt;
+      pt.x+=pt.vx*dt; pt.y+=pt.vy*dt;
+      pt.vx*=0.92; pt.vy*=0.92;
+      if(pt.life<=0) particles.splice(q,1);
+    }
+  }
+
+  function triggerGameOver(){
+    state.gameOver=true;
+    if(state.waveActive){
+      var leaked=state.waveLeaks.warrior+state.waveLeaks.hopper+state.waveLeaks.tanker+state.waveLeaks.brain;
+      state.waveHistory.push({
+        wave:state.wave, moneyAfter:state.money, livesAfter:state.lives,
+        spawned:state.waveSpawned, leaked:leaked, leaksByType:state.waveLeaks,
+        towers:towers.map(function(t){ return {type:t.typeId, level:t.level, col:t.col, row:t.row}; }),
+        fatal:true
+      });
+    }
+    elGoWave.textContent=state.wave;
+    elGoKills.textContent=state.killCount;
+    elGameOver.classList.add("show");
+    sendReport(true);
+  }
+
+  function resetGame(){
+    towerMeshes.forEach(function(mesh){ scene.remove(mesh); disposeMesh(mesh); });
+    towerMeshes.clear();
+    enemyMeshes.forEach(function(mesh){ scene.remove(mesh); disposeMesh(mesh); });
+    enemyMeshes.clear();
+    towers=[]; towerGrid.clear(); enemies=[]; projectiles=[]; particles=[];
+    logEntries=[]; elLog.innerHTML="";
+    state.money=150; state.lives=20; state.wave=0; state.killCount=0;
+    state.waveActive=false; state.betweenTimer=5000; state.spawnQueue=[]; state.spawnTimer=0;
+    state.armedType=null; state.selectedTower=null; state.paused=false; state.gameOver=false;
+    state.damageByType={gunner:0,heavy:0,flame:0,rocket:0,orbital:0};
+    state.builtByType={gunner:0,heavy:0,flame:0,rocket:0,orbital:0};
+    state.leaksByType={warrior:0,hopper:0,tanker:0,brain:0};
+    state.evasions=0; state.waveHistory=[]; state.startedAt=Date.now();
+    elGameOver.classList.remove("show");
+    addLog("Nova operação iniciada. Boa sorte, cidadão.","info");
+    refreshArmory(); renderSelectedPanel();
+  }
+
+  // ---------------- telemetry (HQ uplink) ----------------
+  function initTelemetry(){
+    if(typeof claude==="undefined" || !claude.use) return;
+    claude.use("db").then(function(ns){
+      dbApi=ns;
+      if(ns) addLog("Uplink de telemetria com o QG estabelecido.","info");
+    }).catch(function(){ dbApi=null; });
+  }
+
+  function makeReportCode(){
+    return Date.now().toString(36).toUpperCase().slice(-5)+"-"+Math.random().toString(36).toUpperCase().slice(2,6);
+  }
+
+  function sendReport(finished){
+    if(!dbApi){ addLog("Telemetria indisponível — relatório mantido apenas localmente.","danger"); return; }
+    var code=makeReportCode();
+    var report={
+      code:code,
+      buildVersion:GAME_VERSION,
+      finishedAt:new Date().toISOString(),
+      finished:!!finished,
+      survivedSeconds:Math.round((Date.now()-state.startedAt)/1000),
+      waveReached:state.wave,
+      livesLeft:state.lives,
+      kills:state.killCount,
+      moneyFinal:state.money,
+      damageByType:state.damageByType,
+      builtByType:state.builtByType,
+      leaksByType:state.leaksByType,
+      evasions:state.evasions,
+      towersAtEnd:towers.map(function(t){ return {type:t.typeId, level:t.level, col:t.col, row:t.row}; }),
+      waveHistory:state.waveHistory
+    };
+    dbApi.collection("runs").add(report).then(function(){
+      var hh=new Date();
+      var stamp=String(hh.getHours()).padStart(2,"0")+":"+String(hh.getMinutes()).padStart(2,"0")+":"+String(hh.getSeconds()).padStart(2,"0");
+      addLog("Relatório enviado — CÓDIGO "+code+" (build "+GAME_VERSION+", "+stamp+").","info");
+      elWmCode.textContent="REL "+code;
+    }).catch(function(){
+      addLog("Falha ao transmitir relatório.","danger");
+    });
+  }
+
+  // ---------------- terrain texture (pre-rendered once) ----------------
+  function drawRock(tx,cx,cy,baseR){
+    var pts=7;
+    var rr=[];
+    for(var i=0;i<pts;i++) rr.push(baseR*(0.7+Math.random()*0.5));
+
+    tx.fillStyle="rgba(0,0,0,0.28)";
+    tx.beginPath();
+    for(i=0;i<pts;i++){
+      var ang=(i/pts)*Math.PI*2;
+      var px=cx+3+Math.cos(ang)*rr[i], py=cy+3+Math.sin(ang)*rr[i]*0.78;
+      if(i===0) tx.moveTo(px,py); else tx.lineTo(px,py);
+    }
+    tx.closePath(); tx.fill();
+
+    tx.beginPath();
+    for(i=0;i<pts;i++){
+      var ang2=(i/pts)*Math.PI*2;
+      var px2=cx+Math.cos(ang2)*rr[i], py2=cy+Math.sin(ang2)*rr[i]*0.78;
+      if(i===0) tx.moveTo(px2,py2); else tx.lineTo(px2,py2);
+    }
+    tx.closePath();
+    var grad=tx.createLinearGradient(cx-baseR,cy-baseR,cx+baseR,cy+baseR);
+    grad.addColorStop(0,"rgba(150,140,118,0.5)");
+    grad.addColorStop(0.5,"rgba(70,64,52,0.5)");
+    grad.addColorStop(1,"rgba(20,18,14,0.55)");
+    tx.fillStyle=grad;
+    tx.fill();
+    tx.strokeStyle="rgba(0,0,0,0.4)";
+    tx.lineWidth=1;
+    tx.stroke();
+  }
+
+  function drawCrater(tx,cx,cy,r){
+    var grad=tx.createRadialGradient(cx+r*0.25,cy+r*0.25,r*0.1,cx,cy,r);
+    grad.addColorStop(0,"rgba(0,0,0,0.4)");
+    grad.addColorStop(0.75,"rgba(0,0,0,0.18)");
+    grad.addColorStop(1,"rgba(0,0,0,0)");
+    tx.fillStyle=grad;
+    tx.beginPath(); tx.arc(cx,cy,r,0,Math.PI*2); tx.fill();
+    tx.strokeStyle="rgba(220,210,180,0.16)";
+    tx.lineWidth=1.5;
+    tx.beginPath(); tx.arc(cx,cy,r*0.98,Math.PI*0.9,Math.PI*1.7); tx.stroke();
+  }
+
+  function drawDune(tx,cx,cy,rx,ry,ang){
+    tx.save();
+    tx.translate(cx,cy);
+    tx.rotate(ang);
+    var g=tx.createLinearGradient(-rx,-ry,rx,ry);
+    g.addColorStop(0,"rgba(210,196,158,0.07)");
+    g.addColorStop(0.5,"rgba(210,196,158,0.0)");
+    g.addColorStop(0.55,"rgba(0,0,0,0.0)");
+    g.addColorStop(1,"rgba(0,0,0,0.16)");
+    tx.fillStyle=g;
+    tx.beginPath();
+    tx.ellipse(0,0,rx,ry,0,0,Math.PI*2);
+    tx.fill();
+    tx.restore();
+  }
+
+  function drawPathInto(tx){
+    tx.save();
+    tx.lineCap="round"; tx.lineJoin="round";
+    tx.strokeStyle="#161409"; tx.lineWidth=TILE*0.92;
+    tx.beginPath(); path.forEach(function(pt,i){ i===0?tx.moveTo(pt[0],pt[1]):tx.lineTo(pt[0],pt[1]); }); tx.stroke();
+    tx.strokeStyle="#26261a"; tx.lineWidth=TILE*0.78;
+    tx.beginPath(); path.forEach(function(pt,i){ i===0?tx.moveTo(pt[0],pt[1]):tx.lineTo(pt[0],pt[1]); }); tx.stroke();
+    tx.strokeStyle="rgba(150,138,100,0.14)"; tx.lineWidth=TILE*0.36;
+    tx.beginPath(); path.forEach(function(pt,i){ i===0?tx.moveTo(pt[0],pt[1]):tx.lineTo(pt[0],pt[1]); }); tx.stroke();
+
+    for(var i=0;i<path.length-1;i++){
+      var x1=path[i][0],y1=path[i][1],x2=path[i+1][0],y2=path[i+1][1];
+      var dist=Math.hypot(x2-x1,y2-y1);
+      var ux=(x2-x1)/dist, uy=(y2-y1)/dist, nx=-uy, ny=ux, half=TILE*0.46;
+      tx.strokeStyle="rgba(210,198,160,0.16)"; tx.lineWidth=2;
+      tx.beginPath(); tx.moveTo(x1+nx*half,y1+ny*half); tx.lineTo(x2+nx*half,y2+ny*half); tx.stroke();
+      tx.strokeStyle="rgba(0,0,0,0.35)"; tx.lineWidth=3;
+      tx.beginPath(); tx.moveTo(x1-nx*half,y1-ny*half); tx.lineTo(x2-nx*half,y2-ny*half); tx.stroke();
+    }
+
+    tx.strokeStyle="#f0b400"; tx.lineWidth=3;
+    tx.setLineDash([14,12]); tx.globalAlpha=0.5;
+    tx.beginPath(); path.forEach(function(pt,i){ i===0?tx.moveTo(pt[0],pt[1]):tx.lineTo(pt[0],pt[1]); }); tx.stroke();
+    tx.setLineDash([]); tx.globalAlpha=1;
+    tx.restore();
+  }
+
+  function buildTerrainCanvas(){
+    var tc=document.createElement("canvas");
+    tc.width=CW; tc.height=CH;
+    var tx=tc.getContext("2d");
+
+    for(var r=0;r<ROWS;r++){
+      for(var c=0;c<COLS;c++){
+        tx.fillStyle= buildable[r][c] ? (((c+r)%2===0)?"#1a1a12":"#1e1f15") : "#141410";
+        tx.fillRect(c*TILE,r*TILE,TILE,TILE);
+      }
+    }
+
+    for(var d=0;d<7;d++){
+      drawDune(tx, Math.random()*CW, Math.random()*CH, 90+Math.random()*140, 40+Math.random()*70, Math.random()*Math.PI);
+    }
+
+    var amb=tx.createLinearGradient(0,0,CW,CH);
+    amb.addColorStop(0,"rgba(255,244,214,0.05)");
+    amb.addColorStop(1,"rgba(0,0,0,0.22)");
+    tx.fillStyle=amb;
+    tx.fillRect(0,0,CW,CH);
+
+    tx.strokeStyle="rgba(255,255,255,0.025)";
+    for(var c2=0;c2<=COLS;c2++){ tx.beginPath();tx.moveTo(c2*TILE,0);tx.lineTo(c2*TILE,CH);tx.stroke(); }
+    for(var r2=0;r2<=ROWS;r2++){ tx.beginPath();tx.moveTo(0,r2*TILE);tx.lineTo(CW,r2*TILE);tx.stroke(); }
+
+    for(var r3=0;r3<ROWS;r3++){
+      for(var c3=0;c3<COLS;c3++){
+        if(!buildable[r3][c3]) continue;
+        var cx=c3*TILE+TILE/2, cy=r3*TILE+TILE/2;
+        var roll=Math.random();
+        if(roll<0.08) drawRock(tx,cx+(Math.random()-0.5)*10,cy+(Math.random()-0.5)*10,6+Math.random()*4);
+        else if(roll<0.12) drawCrater(tx,cx,cy,6+Math.random()*4);
+      }
+    }
+
+    drawPathInto(tx);
+
+    var bx=BASE_TILE[0]*TILE+TILE/2, by=BASE_TILE[1]*TILE+TILE/2;
+    tx.save();
+    tx.fillStyle="rgba(20,21,15,0.9)";
+    tx.beginPath(); tx.arc(bx,by,50,0,Math.PI*2); tx.fill();
+    tx.strokeStyle="#f0b400"; tx.lineWidth=4;
+    tx.setLineDash([10,8]); tx.globalAlpha=0.7;
+    tx.beginPath(); tx.arc(bx,by,44,0,Math.PI*2); tx.stroke();
+    tx.setLineDash([]); tx.globalAlpha=1;
+    tx.restore();
+
+    return tc;
+  }
+
+  var terrainCanvas=buildTerrainCanvas();
+  var terrainTexture=new THREE.CanvasTexture(terrainCanvas);
+  if(THREE.sRGBEncoding) terrainTexture.encoding=THREE.sRGBEncoding;
+  var ground=new THREE.Mesh(
+    new THREE.PlaneGeometry(CW,CH),
+    new THREE.MeshStandardMaterial({map:terrainTexture, roughness:0.95})
+  );
+  ground.rotation.x=-Math.PI/2;
+  ground.position.set(CW/2,0,CH/2);
+  ground.receiveShadow=true;
+  scene.add(ground);
+
+  function buildBaseMesh(){
+    var group=new THREE.Group();
+    var wallMat=new THREE.MeshStandardMaterial({color:0x2a2b1e, roughness:0.8});
+    var accentMat=new THREE.MeshStandardMaterial({color:0xf0b400, roughness:0.5, metalness:0.3});
+    var darkMat=new THREE.MeshStandardMaterial({color:0x14150f, roughness:0.7});
+
+    var platform=new THREE.Mesh(new THREE.CylinderGeometry(36,40,10,8), wallMat);
+    platform.position.y=5;
+    platform.castShadow=true; platform.receiveShadow=true;
+    group.add(platform);
+
+    var ring=new THREE.Mesh(new THREE.TorusGeometry(36,1.6,6,8), accentMat);
+    ring.rotation.x=Math.PI/2;
+    ring.position.y=10.3;
+    group.add(ring);
+
+    var dome=new THREE.Mesh(
+      new THREE.SphereGeometry(17,14,8,0,Math.PI*2,0,Math.PI/2),
+      darkMat
+    );
+    dome.position.y=10;
+    dome.castShadow=true;
+    group.add(dome);
+
+    [[1,1],[1,-1],[-1,1],[-1,-1]].forEach(function(o){
+      var wt=new THREE.Mesh(new THREE.CylinderGeometry(3,3.6,20,8), wallMat);
+      wt.position.set(o[0]*25,15,o[1]*25);
+      wt.castShadow=true;
+      group.add(wt);
+      var cap=new THREE.Mesh(new THREE.ConeGeometry(4.2,7,8), accentMat);
+      cap.position.set(o[0]*25,28.5,o[1]*25);
+      group.add(cap);
+    });
+
+    var pole=new THREE.Mesh(new THREE.CylinderGeometry(1,1,16,6), darkMat);
+    pole.position.y=26;
+    group.add(pole);
+
+    var beacon=new THREE.Group();
+    beacon.position.y=34;
+    var beaconLight=new THREE.Mesh(
+      new THREE.SphereGeometry(3.2,10,8),
+      new THREE.MeshStandardMaterial({color:0xfff6cf, emissive:0xffcf5c, emissiveIntensity:0.85})
+    );
+    beacon.add(beaconLight);
+    var beaconArm=new THREE.Mesh(new THREE.BoxGeometry(14,1,1.4), accentMat);
+    beacon.add(beaconArm);
+    group.add(beacon);
+    group.userData.beacon=beacon;
+
+    return group;
+  }
+  var baseMesh=buildBaseMesh();
+  baseMesh.position.set(BASE_TILE[0]*TILE+TILE/2, 0, BASE_TILE[1]*TILE+TILE/2);
+  scene.add(baseMesh);
+
+  // ---------------- 2D overlay (HUD-in-world layer) ----------------
+  function drawGhost(){
+    if(!(hoverCol>=0 && hoverCol<COLS && hoverRow>=0 && hoverRow<ROWS && state.armedType)) return;
+    var def=TOWERS[state.armedType];
+    var cost=currentCost(state.armedType);
+    var ok=buildable[hoverRow] && buildable[hoverRow][hoverCol] && !towerGrid.has(key(hoverCol,hoverRow)) && state.money>=cost;
+    var cx=hoverCol*TILE+TILE/2, cy=hoverRow*TILE+TILE/2;
+    if(def.range<999){
+      ctx.beginPath();
+      ctx.arc(cx,cy,def.range,0,Math.PI*2);
+      ctx.fillStyle= ok?"rgba(240,180,0,0.10)":"rgba(209,58,38,0.10)";
+      ctx.fill();
+      ctx.strokeStyle= ok?"rgba(240,180,0,0.6)":"rgba(209,58,38,0.6)";
+      ctx.stroke();
+    }
+    ctx.fillStyle= ok?"rgba(240,180,0,0.35)":"rgba(209,58,38,0.35)";
+    ctx.fillRect(hoverCol*TILE+3,hoverRow*TILE+3,TILE-6,TILE-6);
+  }
+
+  function drawTowerOverlay(t){
+    if(state.selectedTower===t && towerStat(t,"range")<999){
+      ctx.beginPath();
+      ctx.arc(t.x,t.y,towerStat(t,"range"),0,Math.PI*2);
+      ctx.strokeStyle="rgba(240,234,210,0.35)";
+      ctx.stroke();
+    }
+    for(var lv=0;lv<t.level;lv++){
+      ctx.fillStyle="#f0b400";
+      ctx.fillRect(t.x-14+lv*7,t.y+19,5,3);
+    }
+  }
+
+  function drawEnemyOverlay(e){
+    var w=e.radius*2;
+    var pct=Math.max(0,e.hp/e.maxHp);
+    ctx.fillStyle="rgba(0,0,0,.7)"; ctx.fillRect(e.x-w/2,e.y-e.radius-10,w,4);
+    ctx.fillStyle= pct>0.5?"#9dc24c": pct>0.25?"#f0b400":"#d13a26";
+    ctx.fillRect(e.x-w/2,e.y-e.radius-10,w*pct,4);
+    if(e.evasion>0){
+      ctx.fillStyle="rgba(163,179,74,.9)";
+      ctx.font="9px 'Share Tech Mono', monospace";
+      ctx.textAlign="center";
+      ctx.fillText("◇", e.x, e.y-e.radius-13);
+    }
+  }
+
+  function drawCoverageGaps(){
+    if(towers.length===0) return;
+    ctx.save();
+    for(var i=0;i<path.length-1;i++){
+      var x1=path[i][0],y1=path[i][1],x2=path[i+1][0],y2=path[i+1][1];
+      var dist=Math.hypot(x2-x1,y2-y1);
+      var steps=Math.max(1,Math.round(dist/36));
+      for(var s=0;s<=steps;s++){
+        var t=s/steps, x=x1+(x2-x1)*t, y=y1+(y2-y1)*t;
+        var covered=false;
+        for(var k=0;k<towers.length;k++){
+          var tw=towers[k], r=towerStat(tw,"range");
+          if(r>999 || Math.hypot(tw.x-x,tw.y-y)<=r){ covered=true; break; }
+        }
+        if(!covered){
+          ctx.fillStyle="rgba(209,58,38,0.16)";
+          ctx.beginPath();
+          ctx.arc(x,y,TILE*0.44,0,Math.PI*2);
+          ctx.fill();
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawCloudShadows(){
+    cloudShadows.forEach(function(cs){
+      var g=ctx.createRadialGradient(cs.x,cs.y,0,cs.x,cs.y,cs.rx);
+      g.addColorStop(0,"rgba(0,0,0,0.17)");
+      g.addColorStop(1,"rgba(0,0,0,0)");
+      ctx.fillStyle=g;
+      ctx.beginPath();
+      ctx.ellipse(cs.x,cs.y,cs.rx,cs.ry,0,0,Math.PI*2);
+      ctx.fill();
+    });
+  }
+
+  function drawDust(){
+    dustParticles.forEach(function(p){
+      ctx.fillStyle="rgba(224,214,182,"+p.alpha.toFixed(3)+")";
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
+      ctx.fill();
+    });
+  }
+
+  function drawOverlay(now){
+    ctx.clearRect(0,0,CW,CH);
+    ctx.save();
+    ctx.translate(shakeDX,shakeDY);
+
+    drawCloudShadows();
+    drawCoverageGaps();
+    drawGhost();
+    towers.forEach(drawTowerOverlay);
+    enemies.forEach(drawEnemyOverlay);
+
+    projectiles.forEach(function(pr){
+      ctx.fillStyle=pr.color;
+      ctx.beginPath();
+      ctx.arc(pr.x,pr.y, pr.kind==="bullet"?2.5:pr.kind==="shell"?4:5.5,0,Math.PI*2);
+      ctx.fill();
+    });
+
+    particles.forEach(function(pt){
+      var a=Math.max(0,pt.life/pt.maxLife);
+      ctx.globalAlpha=a;
+      if(pt.beamTo!==undefined){
+        ctx.strokeStyle="#fff6cf";
+        ctx.lineWidth=4;
+        ctx.beginPath(); ctx.moveTo(pt.x,0); ctx.lineTo(pt.x,pt.beamTo); ctx.stroke();
+      } else if(pt.ring){
+        ctx.strokeStyle=pt.color; ctx.lineWidth=3;
+        ctx.beginPath(); ctx.arc(pt.x,pt.y,pt.size*(1-a)+4,0,Math.PI*2); ctx.stroke();
+      } else {
+        ctx.fillStyle=pt.color;
+        ctx.beginPath(); ctx.arc(pt.x,pt.y,pt.size,0,Math.PI*2); ctx.fill();
+      }
+      ctx.globalAlpha=1;
+    });
+
+    if(orbitalImpact){
+      var ip=orbitalImpact.life/orbitalImpact.maxLife, iage=1-ip;
+      var ir=20+iage*95;
+      var ig=ctx.createRadialGradient(orbitalImpact.x,orbitalImpact.y,0,orbitalImpact.x,orbitalImpact.y,ir);
+      ig.addColorStop(0,"rgba(255,246,220,"+(0.55*ip).toFixed(3)+")");
+      ig.addColorStop(0.4,"rgba(240,180,0,"+(0.28*ip).toFixed(3)+")");
+      ig.addColorStop(1,"rgba(240,180,0,0)");
+      ctx.fillStyle=ig;
+      ctx.beginPath(); ctx.arc(orbitalImpact.x,orbitalImpact.y,ir,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle="rgba(255,246,220,"+(0.5*ip).toFixed(3)+")";
+      ctx.lineWidth=3;
+      ctx.beginPath(); ctx.arc(orbitalImpact.x,orbitalImpact.y,10+iage*110,0,Math.PI*2); ctx.stroke();
+    }
+
+    drawDust();
+    ctx.restore();
+  }
+
+  function updateHUD(){
+    elMoney.textContent=state.money;
+    elLives.textContent=Math.max(0,state.lives);
+    elWave.textContent=state.wave;
+    if(state.gameOver) elStatus.textContent="Operação encerrada";
+    else if(state.waveActive) elStatus.textContent="Combate em andamento";
+    else elStatus.textContent="Próxima onda em "+Math.max(0,Math.ceil(state.betweenTimer/1000))+"s";
+    refreshArmory();
+  }
+
+  function renderSelectedPanel(){
+    if(!state.selectedTower){ elSelPanel.style.display="none"; return; }
+    var t=state.selectedTower, def=TOWERS[t.typeId];
+    elSelPanel.style.display="block";
+    var maxed=t.level>=MAX_LEVEL;
+    var cost=upgradeCost(t);
+    var modeRow = t.typeId!=="orbital"
+      ? '<button class="btn small" id="sel-mode" style="width:100%;margin-top:6px;">Mira: '+TARGET_MODE_LABEL[t.mode]+'</button>'
+      : '<div class="row"><span>Modo de mira</span><b>Mais resistente</b></div>';
+    elSelPanel.innerHTML=
+      '<h3>'+def.name+' · Nv.'+t.level+'</h3>'+
+      '<div class="row"><span>Dano</span><b>'+towerStat(t,"damage").toFixed(0)+'</b></div>'+
+      '<div class="row"><span>Alcance</span><b>'+(towerStat(t,"range")>999?"∞":towerStat(t,"range").toFixed(0))+'</b></div>'+
+      '<div class="row"><span>Investido</span><b>'+t.invested+'¢</b></div>'+
+      modeRow+
+      '<div class="selected-actions">'+
+        '<button class="btn primary small" id="sel-upgrade" '+(maxed?"disabled":"")+'>'+(maxed?"Nível máx.":"Melhorar ("+cost+"¢)")+'</button>'+
+        '<button class="btn danger small" id="sel-sell">Vender ('+Math.round(t.invested*0.6)+'¢)</button>'+
+      '</div>';
+    document.getElementById("sel-sell").addEventListener("click",function(){ sellTower(t); });
+    if(!maxed) document.getElementById("sel-upgrade").addEventListener("click",function(){ upgradeTower(t); });
+    var modeBtn=document.getElementById("sel-mode");
+    if(modeBtn) modeBtn.addEventListener("click",function(){
+      var idx=TARGET_MODES.indexOf(t.mode);
+      t.mode=TARGET_MODES[(idx+1)%TARGET_MODES.length];
+      renderSelectedPanel();
+    });
+  }
+
+  // ---------------- input ----------------
+  function eventToTile(evt){
+    var rect=canvas.getBoundingClientRect();
+    var x=(evt.clientX-rect.left)*(CW/rect.width);
+    var y=(evt.clientY-rect.top)*(CH/rect.height);
+    return [Math.floor(x/TILE), Math.floor(y/TILE)];
+  }
+
+  canvas.addEventListener("mousemove",function(evt){
+    var tile=eventToTile(evt);
+    hoverCol=tile[0]; hoverRow=tile[1];
+  });
+  canvas.addEventListener("mouseleave",function(){ hoverCol=-1; hoverRow=-1; });
+
+  canvas.addEventListener("click",function(evt){
+    if(state.gameOver) return;
+    var tile=eventToTile(evt);
+    var col=tile[0], row=tile[1];
+    if(col<0||col>=COLS||row<0||row>=ROWS) return;
+    var existing=towerGrid.get(key(col,row));
+    if(existing){
+      state.selectedTower=existing;
+      state.armedType=null;
+      refreshArmory();
+      renderSelectedPanel();
+      return;
+    }
+    if(state.armedType){
+      buildTower(col,row,state.armedType);
+      return;
+    }
+    state.selectedTower=null;
+    renderSelectedPanel();
+  });
+
+  canvas.addEventListener("contextmenu",function(evt){ evt.preventDefault(); state.armedType=null; refreshArmory(); });
+
+  window.addEventListener("keydown",function(evt){
+    if(evt.key==="Escape"){ state.armedType=null; state.selectedTower=null; refreshArmory(); renderSelectedPanel(); }
+    var n=parseInt(evt.key,10);
+    if(n>=1 && n<=TOWER_ORDER.length) armTower(TOWER_ORDER[n-1]);
+  });
+
+  btnStart.addEventListener("click",function(){ if(!state.waveActive){ state.betweenTimer=0; startNextWave(); } });
+  btnPause.addEventListener("click",function(){
+    state.paused=!state.paused;
+    btnPause.textContent= state.paused?"Continuar":"Pausar";
+    btnPause.classList.toggle("toggled",state.paused);
+  });
+  btnSpeed.addEventListener("click",function(){
+    state.speedMult = state.speedMult===1?2:1;
+    btnSpeed.textContent="Vel. x"+state.speedMult;
+    btnSpeed.classList.toggle("toggled", state.speedMult!==1);
+  });
+  btnRestart.addEventListener("click",resetGame);
+  btnReport.addEventListener("click",function(){ sendReport(false); });
+
+  // ---------------- loop ----------------
+  var last=performance.now();
+  function frame(now){
+    var dt=Math.min((now-last)/1000,0.05);
+    last=now;
+    if(!state.paused && !state.gameOver){
+      update(dt*state.speedMult);
+    }
+    updateAtmosphere(dt);
+    syncMeshes(now);
+    camera.position.set(CW/2+shakeDX,650,CH/2+shakeDY);
+    camera.lookAt(CW/2+shakeDX,0,CH/2+shakeDY);
+    renderer.render(scene,camera);
+    drawOverlay(now);
+    updateHUD();
+    requestAnimationFrame(frame);
+  }
+
+  buildArmory();
+  addLog("Perímetro estabelecido em Klendathu. Aguardando primeira onda.","info");
+  addLog("Trechos com mancha vermelha no mapa estão fora do alcance de qualquer torre.","");
+  initTelemetry();
+  requestAnimationFrame(frame);
+})();
+</script>
