@@ -404,27 +404,53 @@
   .log-list li.info{color:var(--accent);}
   .log-list li::before{content:"› "; color:var(--ink-faint);}
 
-  .rank-list{display:flex; flex-direction:column;}
-  .rank-row{
-    display:grid;
-    grid-template-columns:20px 1fr auto auto;
-    gap:8px;
+  .rank-ticker{
+    margin-top:12px;
+    display:flex;
+    align-items:stretch;
+    border:1px solid var(--line-soft);
+    background:var(--bg-2);
+    overflow:hidden;
+  }
+  .rank-ticker-label{
+    flex:none;
+    display:flex;
     align-items:center;
-    padding:7px 12px;
-    border-bottom:1px solid var(--line-soft);
+    background:var(--accent);
+    color:var(--accent-ink);
+    font-family:'Share Tech Mono',monospace;
+    font-size:10px;
+    font-weight:700;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    padding:0 10px;
+    white-space:nowrap;
+  }
+  .rank-ticker-viewport{
+    flex:1;
+    min-width:0;
+    overflow:hidden;
+    white-space:nowrap;
+  }
+  .rank-ticker-track{
+    display:inline-block;
+    white-space:nowrap;
     font-family:'Share Tech Mono',monospace;
     font-size:11.5px;
+    color:var(--ink-dim);
+    padding:7px 14px;
+    animation:rank-scroll 26s linear infinite;
   }
-  .rank-row:last-child{border-bottom:none;}
-  .rank-pos{color:var(--ink-faint); font-weight:600;}
-  .rank-row.top .rank-pos{color:var(--accent);}
-  .rank-name{
-    color:var(--ink); font-family:'Oswald',sans-serif; font-size:13px; letter-spacing:.02em;
-    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  .rank-ticker-track .rk-pos{color:var(--accent); font-weight:700;}
+  .rank-ticker-track .rk-name{color:var(--ink); font-family:'Oswald',sans-serif; letter-spacing:.02em;}
+  .rank-ticker-track .rk-sep{color:var(--ink-faint); margin:0 18px;}
+  @keyframes rank-scroll{
+    from{transform:translateX(0);}
+    to{transform:translateX(-50%);}
   }
-  .rank-wave{color:var(--good);}
-  .rank-kills{color:var(--ink-faint); font-size:10px;}
-  .rank-empty{padding:10px 12px; color:var(--ink-faint); font-size:11.5px; font-family:'Share Tech Mono',monospace;}
+  @media (prefers-reduced-motion:reduce){
+    .rank-ticker-track{animation:none;}
+  }
 
   .rank-submit{display:flex; flex-direction:column; gap:8px; width:100%; margin:2px 0;}
   .rank-submit-row{display:flex; gap:8px;}
@@ -494,6 +520,12 @@
         </svg>
       </div>
     </div>
+    <div class="rank-ticker">
+      <span class="rank-ticker-label">Ranking ao vivo</span>
+      <div class="rank-ticker-viewport">
+        <div class="rank-ticker-track" id="rank-ticker-track">Carregando ranking…</div>
+      </div>
+    </div>
     <div class="hazard-strip"></div>
   </div>
 
@@ -560,11 +592,6 @@
     <!-- ARMORY -->
     <div>
       <div class="armory selected-panel" id="selected-panel" style="display:none;"></div>
-
-      <div class="armory" style="margin-top:14px;">
-        <div class="panel-head">Ranking Federal — Top 10</div>
-        <ul class="rank-list" id="rank-list"><li class="rank-empty">Carregando…</li></ul>
-      </div>
 
       <div class="armory" style="margin-top:14px;">
         <div class="panel-head">Arsenal de Infantaria</div>
@@ -765,7 +792,7 @@
   var btnReport=document.getElementById("btn-report");
   var elWmBuild=document.getElementById("wm-build");
   var elWmCode=document.getElementById("wm-code");
-  var elRankList=document.getElementById("rank-list");
+  var elRankList=document.getElementById("rank-ticker-track");
   var rankNameInput=document.getElementById("rank-name-input");
   var btnRankSubmit=document.getElementById("btn-rank-submit");
   var elRankStatus=document.getElementById("rank-submit-status");
@@ -1442,17 +1469,15 @@
   function renderRanking(rows){
     if(!elRankList) return;
     if(!rows || !rows.length){
-      elRankList.innerHTML='<li class="rank-empty">Nenhum registro ainda. Seja o primeiro a defender o setor.</li>';
+      elRankList.style.animation="none";
+      elRankList.innerHTML='<span class="rk-name">Nenhum registro ainda. Seja o primeiro a defender o setor.</span>';
       return;
     }
-    elRankList.innerHTML=rows.map(function(r,i){
-      return '<li class="rank-row'+(i<3?' top':'')+'">'+
-        '<span class="rank-pos">'+(i+1)+'</span>'+
-        '<span class="rank-name">'+escapeHtml(r.name)+'</span>'+
-        '<span class="rank-wave">Onda '+r.wave+'</span>'+
-        '<span class="rank-kills">'+r.kills+'x</span>'+
-      '</li>';
-    }).join("");
+    var entry=rows.map(function(r,i){
+      return '<span class="rk-pos">'+(i+1)+'º</span> <span class="rk-name">'+escapeHtml(r.name)+'</span> — Onda '+r.wave+' ('+r.kills+'x)';
+    }).join('<span class="rk-sep">•</span>');
+    elRankList.style.animation="";
+    elRankList.innerHTML=entry+'<span class="rk-sep">•</span>'+entry+'<span class="rk-sep">•</span>';
   }
 
   function fetchRanking(){
