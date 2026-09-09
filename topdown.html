@@ -1505,7 +1505,8 @@
       name:name, mode:RANK_MODE, wave:state.wave, kills:state.killCount
     }).then(function(res){
       if(res.error){
-        elRankStatus.textContent="Falha ao registrar.";
+        console.warn("ranking submit error",res.error);
+        elRankStatus.textContent="Falha ao registrar (rede instável — tente de novo).";
         rankSubmitted=false;
         btnRankSubmit.disabled=false;
         return;
@@ -1513,8 +1514,9 @@
       try{ localStorage.setItem("te_rank_name",name); }catch(e){}
       elRankStatus.textContent="Registrado no ranking!";
       fetchRanking();
-    }).catch(function(){
-      elRankStatus.textContent="Falha ao registrar.";
+    }).catch(function(err){
+      console.warn("ranking submit failed",err);
+      elRankStatus.textContent="Sem confirmação de rede — se o problema persistir, tente de novo em instantes.";
       rankSubmitted=false;
       btnRankSubmit.disabled=false;
     });
