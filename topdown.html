@@ -479,12 +479,20 @@
     .broadcast{padding:10px 14px 12px;}
     .broadcast-row{font-size:9.5px;}
     .tagline{font-size:12px; max-width:none;}
+    .rank-ticker-label{font-size:9px; padding:0 8px;}
+    .rank-ticker-track{font-size:10.5px;}
     .hud-strip{font-size:11px;}
     .hud-cell{padding:6px 8px; flex:1 1 40%;}
     .hud-controls{width:100%; padding:8px;}
-    .hud-controls .btn{flex:1 1 auto;}
+    .hud-controls .btn{flex:1 1 auto; min-height:42px;}
     .tower-card{padding:10px;}
     .tower-card .desc{display:none;}
+    .rank-submit-row{flex-direction:column;}
+    .rank-submit-row .btn{min-height:42px;}
+  }
+  @media (pointer:coarse){
+    .btn{min-height:42px;}
+    .btn.small{min-height:40px;}
   }
 </style>
 </head>
@@ -771,7 +779,8 @@
   var canvasOverlay=document.getElementById("overlay");
   var canvas=canvasOverlay; // input target
   var ctx=canvasOverlay.getContext("2d");
-  var DPR=Math.min(window.devicePixelRatio||1,2);
+  var IS_TOUCH=!!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+  var DPR=Math.min(window.devicePixelRatio||1, IS_TOUCH?1.5:2);
   canvasOverlay.width=CW*DPR; canvasOverlay.height=CH*DPR;
   ctx.scale(DPR,DPR);
 
@@ -873,7 +882,7 @@
   }
 
   // ---------------- 3D scene ----------------
-  var renderer=new THREE.WebGLRenderer({canvas:canvas3d, antialias:true});
+  var renderer=new THREE.WebGLRenderer({canvas:canvas3d, antialias:!IS_TOUCH});
   renderer.setPixelRatio(DPR);
   renderer.setSize(CW,CH,false);
   renderer.shadowMap.enabled=true;
@@ -894,7 +903,7 @@
   sunLight.position.set(CW*0.18,520,CH*0.12);
   sunLight.target.position.set(CW/2,0,CH/2);
   sunLight.castShadow=true;
-  sunLight.shadow.mapSize.set(1024,1024);
+  sunLight.shadow.mapSize.set(IS_TOUCH?512:1024, IS_TOUCH?512:1024);
   sunLight.shadow.camera.left=-CW/2-80;
   sunLight.shadow.camera.right=CW/2+80;
   sunLight.shadow.camera.top=CH/2+80;
