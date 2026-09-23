@@ -186,16 +186,21 @@
   }
 
   .btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
     font-family:'Oswald',sans-serif;
     font-weight:600;
     font-size:12px;
     letter-spacing:.08em;
     text-transform:uppercase;
+    text-decoration:none;
     background:var(--panel-2);
     color:var(--ink);
     border:1px solid var(--line);
     padding:8px 12px;
     min-height:38px;
+    box-sizing:border-box;
     cursor:pointer;
     touch-action:manipulation;
     -webkit-tap-highlight-color:transparent;
@@ -431,26 +436,19 @@
     min-width:0;
     overflow:hidden;
     white-space:nowrap;
+    text-overflow:ellipsis;
   }
   .rank-ticker-track{
-    display:inline-block;
+    display:inline;
     white-space:nowrap;
     font-family:'Share Tech Mono',monospace;
     font-size:11.5px;
     color:var(--ink-dim);
     padding:7px 14px;
-    animation:rank-scroll 26s linear infinite;
   }
   .rank-ticker-track .rk-pos{color:var(--accent); font-weight:700;}
   .rank-ticker-track .rk-name{color:var(--ink); font-family:'Oswald',sans-serif; letter-spacing:.02em;}
   .rank-ticker-track .rk-sep{color:var(--ink-faint); margin:0 18px;}
-  @keyframes rank-scroll{
-    from{transform:translateX(0);}
-    to{transform:translateX(-50%);}
-  }
-  @media (prefers-reduced-motion:reduce){
-    .rank-ticker-track{animation:none;}
-  }
 
   .rank-submit{display:flex; flex-direction:column; gap:8px; width:100%; margin:2px 0;}
   .rank-submit-row{display:flex; gap:8px;}
@@ -563,6 +561,7 @@
           <button class="btn small" id="btn-pause">Pausar</button>
           <button class="btn small" id="btn-speed">Vel. x1</button>
           <button class="btn small" id="btn-report" title="Envia um relatório desta partida ao QG (para calibragem)">Relatório</button>
+          <a class="btn small" href="iso.html" title="Trocar para a câmera isométrica">Visão Isométrica</a>
         </div>
       </div>
 
@@ -1478,15 +1477,12 @@
   function renderRanking(rows){
     if(!elRankList) return;
     if(!rows || !rows.length){
-      elRankList.style.animation="none";
       elRankList.innerHTML='<span class="rk-name">Nenhum registro ainda. Seja o primeiro a defender o setor.</span>';
       return;
     }
-    var entry=rows.map(function(r,i){
+    elRankList.innerHTML=rows.map(function(r,i){
       return '<span class="rk-pos">'+(i+1)+'º</span> <span class="rk-name">'+escapeHtml(r.name)+'</span> — Onda '+r.wave+' ('+r.kills+'x)';
     }).join('<span class="rk-sep">•</span>');
-    elRankList.style.animation="";
-    elRankList.innerHTML=entry+'<span class="rk-sep">•</span>'+entry+'<span class="rk-sep">•</span>';
   }
 
   function fetchRanking(){
