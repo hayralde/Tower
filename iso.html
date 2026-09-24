@@ -961,7 +961,69 @@
     });
   }
 
-  function buildTowerMesh(typeId){
+  // ---------------- tower sprites (arsenal art pack, falls back to procedural mesh if unavailable) ----------------
+  var SPRITE_BASE="assets/towers/";
+  var SPRITE_FILES={
+    mi9_l1:{file:"mi9_l1.png", w:450, h:480},
+    mi9_l2:{file:"mi9_l2.png", w:480, h:459},
+    mi9_l3:{file:"mi9_l3.png", w:480, h:432},
+    mi9_l3_firing:{file:"mi9_l3_firing.png", w:480, h:412},
+    morita:{file:"morita_l1.png", w:480, h:336},
+    tx7:{file:"tx7_l1.png", w:480, h:371},
+    yrex:{file:"yrex_l1.png", w:444, h:480},
+    orbital:{file:"orbital_l1.png", w:314, h:480}
+  };
+  var spriteTextures={};
+  (function loadSprites(){
+    var loader=new THREE.TextureLoader();
+    Object.keys(SPRITE_FILES).forEach(function(key){
+      loader.load(SPRITE_BASE+SPRITE_FILES[key].file, function(tex){
+        if(THREE.sRGBEncoding) tex.encoding=THREE.sRGBEncoding;
+        spriteTextures[key]=tex;
+      }, undefined, function(){ /* asset unavailable — tower keeps its procedural mesh */ });
+    });
+  })();
+
+  var TOWER_SPRITE_HEIGHT={gunner:42, heavy:38, flame:36, rocket:42, orbital:46};
+  function spriteKeyFor(typeId, level, firing){
+    if(typeId==="gunner"){
+      if(level>=3) return firing ? "mi9_l3_firing" : "mi9_l3";
+      if(level===2) return "mi9_l2";
+      return "mi9_l1";
+    }
+    if(typeId==="heavy") return "morita";
+    if(typeId==="flame") return "tx7";
+    if(typeId==="rocket") return "yrex";
+    if(typeId==="orbital") return "orbital";
+    return null;
+  }
+
+  function buildTowerMesh(typeId, level){
+    level=level||1;
+    var spriteKey=spriteKeyFor(typeId, level, false);
+    var tex=spriteKey && spriteTextures[spriteKey];
+    if(tex){
+      var sGroup=new THREE.Group();
+      var info=SPRITE_FILES[spriteKey];
+      var height=TOWER_SPRITE_HEIGHT[typeId]||42;
+      var width=height*(info.w/info.h);
+      var sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:tex, transparent:true}));
+      sprite.scale.set(width,height,1);
+      sprite.position.y=height/2;
+      sGroup.add(sprite);
+      var shadowBlob=new THREE.Mesh(
+        new THREE.CircleGeometry(width*0.32,16),
+        new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:0.32, depthWrite:false})
+      );
+      shadowBlob.rotation.x=-Math.PI/2;
+      shadowBlob.position.y=0.4;
+      sGroup.add(shadowBlob);
+      sGroup.userData.isSprite=true;
+      sGroup.userData.sprite=sprite;
+      sGroup.userData.spriteKey=spriteKey;
+      return sGroup;
+    }
+
     var def=TOWERS[typeId];
     var colorHex=parseInt(def.color.slice(1),16);
     var group=new THREE.Group();
@@ -1090,6 +1152,20 @@
     towers.forEach(function(t){
       var mesh=towerMeshes.get(t);
       if(!mesh) return;
+      if(mesh.userData.isSprite){
+        if(t.typeId==="orbital"){
+          mesh.userData.sprite.material.rotation=now*0.0014;
+        } else if(t.typeId==="gunner" && t.level>=3){
+          var firing=!!(t.firingUntil && now<t.firingUntil);
+          var wantKey=firing?"mi9_l3_firing":"mi9_l3";
+          if(mesh.userData.spriteKey!==wantKey && spriteTextures[wantKey]){
+            mesh.userData.sprite.material.map=spriteTextures[wantKey];
+            mesh.userData.sprite.material.needsUpdate=true;
+            mesh.userData.spriteKey=wantKey;
+          }
+        }
+        return;
+      }
       var turret=mesh.userData.turret;
       if(t.typeId==="orbital"){
         turret.rotation.y=now*0.0014;
@@ -1246,7 +1322,7 @@
     towerGrid.set(key(col,row),tower);
     state.builtByType[typeId]++;
 
-    var mesh=buildTowerMesh(typeId);
+    var mesh=buildTowerMesh(typeId,1);
     mesh.position.set(tower.x,0,tower.y);
     scene.add(mesh);
     towerMeshes.set(tower,mesh);
@@ -1272,6 +1348,17 @@
     state.money-=cost;
     tower.invested+=cost;
     tower.level++;
+    var oldMesh=towerMeshes.get(tower);
+    if(oldMesh && oldMesh.userData.isSprite){
+      var newKey=spriteKeyFor(tower.typeId, tower.level, false);
+      if(newKey!==oldMesh.userData.spriteKey){
+        scene.remove(oldMesh); disposeMesh(oldMesh);
+        var newMesh=buildTowerMesh(tower.typeId, tower.level);
+        newMesh.position.set(tower.x,0,tower.y);
+        scene.add(newMesh);
+        towerMeshes.set(tower,newMesh);
+      }
+    }
     addLog(TOWERS[tower.typeId].name+" ampliado para nível "+tower.level+".","info");
     renderSelectedPanel();
     refreshArmory();
@@ -1373,6 +1460,7 @@
     }
 
     tower.recoil = def.kind==="shell"?7 : def.kind==="rocket"?6 : 3;
+    if(tower.typeId==="gunner") tower.firingUntil=performance.now()+220;
     var speed = def.kind==="bullet"?420 : def.kind==="shell"?300:220;
     projectiles.push({
       x:tower.x,y:tower.y,targetId:target.id,speed:speed,
