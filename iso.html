@@ -914,6 +914,7 @@
   positionIsoCamera(0,0);
 
   var groundPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
+  var mesaPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
   var raycaster=new THREE.Raycaster();
   var mouseNDC=new THREE.Vector2();
   function screenToGroundPoint(evt){
@@ -921,6 +922,11 @@
     mouseNDC.set(((evt.clientX-rect.left)/rect.width)*2-1, -(((evt.clientY-rect.top)/rect.height)*2-1));
     raycaster.setFromCamera(mouseNDC,camera);
     var hit=new THREE.Vector3();
+    // the mesa top sits high above the ground, so try its plateau plane first
+    if(typeof MESA_H==="number"){
+      mesaPlane.constant=-MESA_H;
+      if(raycaster.ray.intersectPlane(mesaPlane,hit) && isHighTile(Math.floor(hit.x/TILE),Math.floor(hit.z/TILE))) return hit;
+    }
     return raycaster.ray.intersectPlane(groundPlane,hit) ? hit : null;
   }
   function worldToScreen(x,y,z){
@@ -1113,6 +1119,11 @@
     part(gBox(15,8,14), olive, -2,5,0, turret);
     var wedge=part(gBox(7,6,12), olive, 6,4,0, turret); wedge.rotation.z=0.4;
     part(gBox(5,3,5), steel, -6,10,4, turret);
+    if(level>=2) part(gBox(7,5,9), oliveD, -11,6,0, turret);
+    if(level>=3){
+      part(gBox(12,6,1.6), oliveD, -1,5,7.8, turret); part(gBox(12,6,1.6), oliveD, -1,5,-7.8, turret);
+      rodX(turret,0.7,10,2,9.5,-4.5,steel);
+    }
     var zs=level>=3 ? [-2.8,2.8] : [0];
     var len=level>=2 ? 30 : 27;
     zs.forEach(function(z){
@@ -1142,6 +1153,7 @@
     part(gBox(14,9,12), grey, -2,5.5,0, turret);
     part(gBox(14.2,1.8,12.2), orange, -2,7,0, turret);
     part(gBox(14.3,0.8,12.3), black, -2,5.5,0, turret);
+    if(level>=2){ part(gBox(1.6,8,13), grey, 5.4,5,0, turret); part(gBox(1.7,1.6,13.1), orange, 5.4,8.4,0, turret); }
     var tankZs=level>=2 ? [-4.4,0,4.4] : [-3.6,3.6];
     tankZs.forEach(function(z){
       rodX(turret,3.1,12,-9,13,z,greyL,12);
@@ -1183,6 +1195,7 @@
       marker(pod,10,y,z,tu.muzzles);
     }
     tu.recoil.push({obj:pod, base:pod.position.x, k:0.35});
+    if(level>=3){ part(gBox(12,podH-2,1.4), red, 0,0,8.2, pod); part(gBox(12,podH-2,1.4), red, 0,0,-8.2, pod); }
     if(level>=2){
       var dish=new THREE.Group(); dish.position.set(-5,23+(rows-2)*6.4,0); root.add(dish);
       part(gCyl(0.6,0.6,4,6), steel, 0,-1,0, dish);
@@ -1215,6 +1228,15 @@
     root.userData.dish=dish;
     root.userData.core=core;
     root.userData.coreBase=level>=3 ? 1.8 : level===2 ? 1.4 : 1.1;
+    var hot=smat(0xff3b30,{emissive:0xff2010, emissiveIntensity:1.6});
+    if(level>=2){ var halo=part(sgeo("halo",function(){ return new THREE.TorusGeometry(9,0.7,6,24); }), hot, 0,19.5,0, root); halo.rotation.x=Math.PI/2; }
+    if(level>=3){
+      [0.6,2.7,4.8].forEach(function(a){
+        var px=Math.cos(a)*14, pz=Math.sin(a)*14;
+        part(gCyl(1.2,1.8,14,6), black, px,12,pz, root);
+        part(gSphere(1.6,10,8), hot, px,20,pz, root);
+      });
+    }
     turret.position.y=23;
     part(gBox(10,3.5,4), black, 9,0,0, turret);
     rodX(turret,1.5,6,13,0,0,steel);
@@ -1222,6 +1244,22 @@
     marker(turret,20,0,0,tu.muzzles);
   }
 
+  var LEVEL_SCALE=[1,1,1.14,1.28];
+  // gold rings on the turret mount (one per upgrade) and gold chevrons on the pad facing the camera
+  function addRankInsignia(root, turret, typeId, level){
+    if(level<2) return;
+    var gold=smat(0xf0b400,{metalness:0.6, roughness:0.3, emissive:0x3a2800});
+    var ring=sgeo("rank",function(){ return new THREE.TorusGeometry(7.6,0.75,6,24); });
+    for(var i=0;i<level-1;i++){
+      var m=part(ring, gold, 0,0.3+i*1.7,0, turret);
+      m.rotation.x=Math.PI/2;
+    }
+    for(var j=0;j<level-1;j++){
+      var off=11.5-j*2.6;
+      var c=part(gBox(5,0.7,1.5), gold, off*0.707,2.1,off*0.707, root);
+      c.rotation.y=-Math.PI/4;
+    }
+  }
   var TOWER_BUILDERS={gunner:buildGunner, heavy:buildHeavy, flame:buildFlame, rocket:buildRocket, orbital:buildOrbital};
   var TURRET_TURN_RATE=10;
   function buildTowerMesh(typeId, level){
@@ -1230,6 +1268,8 @@
     root.add(turret);
     var tu={muzzles:[], recoil:[], spinners:[]};
     TOWER_BUILDERS[typeId](root, turret, level, tu);
+    addRankInsignia(root, turret, typeId, level);
+    root.scale.setScalar(LEVEL_SCALE[level]||1);
     turret.userData=tu;
     root.userData.turret=turret;
     return root;
@@ -1541,6 +1581,7 @@
     mesh.position.set(e.x,0,e.y);
     scene.add(mesh);
     enemyMeshes.set(e.id,mesh);
+    nestHatch();
   }
 
   function buildWave(n){
@@ -1667,29 +1708,39 @@
     var tower={
       typeId:typeId, col:col,row:row,
       x:col*TILE+TILE/2, y:row*TILE+TILE/2,
-      level:1, cooldown:0, angle:0, invested:cost, flameTimer:0, recoil:0, mode:"first"
+      level:1, cooldown:0, angle:0, invested:cost, flameTimer:0, recoil:0, mode:"first",
+      high:isHighTile(col,row)
     };
     towers.push(tower);
     towerGrid.set(key(col,row),tower);
     state.builtByType[typeId]++;
 
-    var mesh=buildTowerMesh(typeId,1);
-    mesh.position.set(tower.x,0,tower.y);
-    scene.add(mesh);
-    towerMeshes.set(tower,mesh);
+    placeTowerMesh(tower);
+    var gy=tileHeight(col,row);
     for(var di=0;di<6;di++){
       var da=di/6*Math.PI*2;
-      spawnSmoke(tower.x+Math.cos(da)*14,3,tower.y+Math.sin(da)*14,12,0.7,{color:0x8a8576, opacity:0.4, rise:6, vx:Math.cos(da)*14, vz:Math.sin(da)*14});
+      spawnSmoke(tower.x+Math.cos(da)*14,gy+3,tower.y+Math.sin(da)*14,12,0.7,{color:0x8a8576, opacity:0.4, rise:6, vx:Math.cos(da)*14, vz:Math.sin(da)*14});
     }
 
-    addLog(TOWERS[typeId].name+" instalado no setor "+col+","+row+".","");
+    addLog(TOWERS[typeId].name+" instalado no setor "+col+","+row+"."+(tower.high?" Terreno elevado: +20% de alcance.":""),tower.high?"info":"");
     refreshArmory();
+  }
+
+  function placeTowerMesh(tower){
+    var old=towerMeshes.get(tower);
+    if(old){ scene.remove(old); disposeMesh(old); }
+    var mesh=buildTowerMesh(tower.typeId, tower.level);
+    mesh.position.set(tower.x, tileHeight(tower.col,tower.row), tower.y);
+    // up on the mesa a cast shadow would land on the ground far below, detached from the tower
+    if(tower.high) mesh.traverse(function(o){ o.castShadow=false; });
+    scene.add(mesh);
+    towerMeshes.set(tower,mesh);
   }
 
   function towerStat(tower,field){
     var base=TOWERS[tower.typeId][field];
     if(field==="damage") return base*(1+(tower.level-1)*PER_LEVEL.damage);
-    if(field==="range") return base*(1+(tower.level-1)*PER_LEVEL.range);
+    if(field==="range") return base*(1+(tower.level-1)*PER_LEVEL.range)*(tower.high?HIGH_GROUND_RANGE:1);
     return base;
   }
   function upgradeCost(tower){
@@ -1703,14 +1754,15 @@
     state.money-=cost;
     tower.invested+=cost;
     tower.level++;
-    var oldMesh=towerMeshes.get(tower);
-    if(oldMesh){ scene.remove(oldMesh); disposeMesh(oldMesh); }
-    var newMesh=buildTowerMesh(tower.typeId, tower.level);
-    newMesh.position.set(tower.x,0,tower.y);
-    scene.add(newMesh);
-    towerMeshes.set(tower,newMesh);
-    spawnSparks(tower.x,14,tower.y,12,0xffe08a,90);
-    spawnSmoke(tower.x,4,tower.y,20,0.8,{color:0x8a8576, opacity:0.35, rise:10});
+    placeTowerMesh(tower);
+    // upgrade burst: golden flash, sparks and a ring of dust so the new model reads as an upgrade
+    var uy=tileHeight(tower.col,tower.row);
+    spawnMuzzleFlash({x:tower.x,y:uy+18,z:tower.y},46,0xffd46a,0.35);
+    spawnSparks(tower.x,uy+16,tower.y,18,0xffe08a,110);
+    for(var ui=0;ui<8;ui++){
+      var ua=ui/8*Math.PI*2;
+      spawnSmoke(tower.x+Math.cos(ua)*12,uy+3,tower.y+Math.sin(ua)*12,12,0.8,{color:0x8a8576, opacity:0.4, rise:8, vx:Math.cos(ua)*22, vz:Math.sin(ua)*22});
+    }
     addLog(TOWERS[tower.typeId].name+" ampliado para nível "+tower.level+".","info");
     renderSelectedPanel();
     refreshArmory();
@@ -2081,139 +2133,262 @@
     });
   }
 
-  // ---------------- terrain texture (pre-rendered once) ----------------
-  function drawRock(tx,cx,cy,baseR){
-    var pts=7;
-    var rr=[];
-    for(var i=0;i<pts;i++) rr.push(baseR*(0.7+Math.random()*0.5));
-
-    tx.fillStyle="rgba(0,0,0,0.28)";
-    tx.beginPath();
-    for(i=0;i<pts;i++){
-      var ang=(i/pts)*Math.PI*2;
-      var px=cx+3+Math.cos(ang)*rr[i], py=cy+3+Math.sin(ang)*rr[i]*0.78;
-      if(i===0) tx.moveTo(px,py); else tx.lineTo(px,py);
+  // ---------------- terrain: Klendathu desert sand + bug trail, painted once into a texture ----------------
+  var TERRAIN_SCALE=2;
+  var NEST_CENTER={x:24, z:120}, CRATER_CENTER={x:56, z:560}, MESA_CENTER={x:288, z:336};
+  // clutter stays out of the spots taken by the base and the terrain dioramas
+  var TERRAIN_KEEPOUT=[
+    {x:BASE_TILE[0]*TILE+TILE/2, z:BASE_TILE[1]*TILE+TILE/2, r:100},
+    {x:NEST_CENTER.x, z:NEST_CENTER.z, r:75},
+    {x:CRATER_CENTER.x, z:CRATER_CENTER.z, r:82},
+    {x:MESA_CENTER.x, z:MESA_CENTER.z, r:140}
+  ];
+  function seeded(seed){ var s=seed>>>0; return function(){ s=(s*1664525+1013904223)>>>0; return s/4294967296; }; }
+  function distToPath(x,y){
+    var best=1e9;
+    for(var i=0;i<path.length-1;i++){
+      var ax=path[i][0], ay=path[i][1], bx=path[i+1][0], by=path[i+1][1];
+      var dx=bx-ax, dy=by-ay, l2=dx*dx+dy*dy;
+      var t=l2 ? Math.max(0,Math.min(1,((x-ax)*dx+(y-ay)*dy)/l2)) : 0;
+      best=Math.min(best, Math.hypot(x-(ax+dx*t), y-(ay+dy*t)));
     }
-    tx.closePath(); tx.fill();
-
-    tx.beginPath();
-    for(i=0;i<pts;i++){
-      var ang2=(i/pts)*Math.PI*2;
-      var px2=cx+Math.cos(ang2)*rr[i], py2=cy+Math.sin(ang2)*rr[i]*0.78;
-      if(i===0) tx.moveTo(px2,py2); else tx.lineTo(px2,py2);
+    return best;
+  }
+  function clearSpot(x,y,margin){
+    if(distToPath(x,y)<TILE*0.55+margin) return false;
+    for(var i=0;i<TERRAIN_KEEPOUT.length;i++){
+      var k=TERRAIN_KEEPOUT[i];
+      if(Math.hypot(x-k.x,y-k.z)<k.r+margin) return false;
     }
+    return true;
+  }
+
+  function drawSandRock(tx,cx,cy,r,R){
+    tx.fillStyle="rgba(95,48,18,0.3)";
+    tx.beginPath(); tx.ellipse(cx+r*0.55,cy+r*0.45,r*1.1,r*0.72,0,0,Math.PI*2); tx.fill();
+    var n=7, pts=[];
+    for(var i=0;i<n;i++){ var a=i/n*Math.PI*2, rr=r*(0.75+R()*0.35); pts.push([cx+Math.cos(a)*rr, cy+Math.sin(a)*rr*0.85]); }
+    tx.beginPath();
+    pts.forEach(function(p,i){ i?tx.lineTo(p[0],p[1]):tx.moveTo(p[0],p[1]); });
     tx.closePath();
-    var grad=tx.createLinearGradient(cx-baseR,cy-baseR,cx+baseR,cy+baseR);
-    grad.addColorStop(0,"rgba(150,140,118,0.5)");
-    grad.addColorStop(0.5,"rgba(70,64,52,0.5)");
-    grad.addColorStop(1,"rgba(20,18,14,0.55)");
-    tx.fillStyle=grad;
-    tx.fill();
-    tx.strokeStyle="rgba(0,0,0,0.4)";
-    tx.lineWidth=1;
-    tx.stroke();
+    var g=tx.createLinearGradient(cx-r,cy-r,cx+r,cy+r);
+    g.addColorStop(0,"#f2c38f"); g.addColorStop(0.45,"#c98a52"); g.addColorStop(1,"#7a4a26");
+    tx.fillStyle=g; tx.fill();
+    tx.strokeStyle="rgba(70,38,16,0.55)"; tx.lineWidth=0.8; tx.stroke();
+    tx.strokeStyle="rgba(255,232,195,0.35)"; tx.lineWidth=0.7;
+    for(var k=0;k<2;k++){
+      var yy=cy-r*0.3+k*r*0.35;
+      tx.beginPath(); tx.moveTo(cx-r*0.6,yy); tx.quadraticCurveTo(cx,yy-r*0.12,cx+r*0.55,yy+r*0.05); tx.stroke();
+    }
   }
-
-  function drawCrater(tx,cx,cy,r){
-    var grad=tx.createRadialGradient(cx+r*0.25,cy+r*0.25,r*0.1,cx,cy,r);
-    grad.addColorStop(0,"rgba(0,0,0,0.4)");
-    grad.addColorStop(0.75,"rgba(0,0,0,0.18)");
-    grad.addColorStop(1,"rgba(0,0,0,0)");
-    tx.fillStyle=grad;
-    tx.beginPath(); tx.arc(cx,cy,r,0,Math.PI*2); tx.fill();
-    tx.strokeStyle="rgba(220,210,180,0.16)";
-    tx.lineWidth=1.5;
-    tx.beginPath(); tx.arc(cx,cy,r*0.98,Math.PI*0.9,Math.PI*1.7); tx.stroke();
+  function drawPebble(tx,x,y,r,R){
+    var cols=["#b77a48","#a06a3f","#c98f5e","#8f5c35","#d4a070"];
+    tx.fillStyle="rgba(90,45,15,0.28)";
+    tx.beginPath(); tx.ellipse(x+r*0.5,y+r*0.4,r,r*0.7,0,0,Math.PI*2); tx.fill();
+    tx.fillStyle=cols[Math.floor(R()*cols.length)];
+    tx.beginPath(); tx.ellipse(x,y,r,r*0.8,R()*Math.PI,0,Math.PI*2); tx.fill();
+    tx.fillStyle="rgba(255,235,200,0.45)";
+    tx.beginPath(); tx.arc(x-r*0.3,y-r*0.3,r*0.35,0,Math.PI*2); tx.fill();
   }
-
-  function drawDune(tx,cx,cy,rx,ry,ang){
-    tx.save();
-    tx.translate(cx,cy);
-    tx.rotate(ang);
-    var g=tx.createLinearGradient(-rx,-ry,rx,ry);
-    g.addColorStop(0,"rgba(210,196,158,0.07)");
-    g.addColorStop(0.5,"rgba(210,196,158,0.0)");
-    g.addColorStop(0.55,"rgba(0,0,0,0.0)");
-    g.addColorStop(1,"rgba(0,0,0,0.16)");
-    tx.fillStyle=g;
-    tx.beginPath();
-    tx.ellipse(0,0,rx,ry,0,0,Math.PI*2);
-    tx.fill();
+  function drawTuft(tx,x,y,R){
+    tx.strokeStyle="rgba(92,82,42,0.85)"; tx.lineWidth=0.7;
+    for(var i=0;i<8;i++){
+      var a=-Math.PI/2+(R()-0.5)*2.4, l=3+R()*4;
+      tx.beginPath(); tx.moveTo(x,y); tx.lineTo(x+Math.cos(a)*l, y+Math.sin(a)*l*0.8); tx.stroke();
+    }
+  }
+  function drawPlate(tx,x,y,w,h,a){
+    tx.save(); tx.translate(x,y); tx.rotate(a);
+    tx.fillStyle="rgba(90,45,15,0.3)"; tx.fillRect(-w/2+1.5,-h/2+1.5,w,h);
+    tx.fillStyle="#a39679"; tx.fillRect(-w/2,-h/2,w,h);
+    tx.strokeStyle="#5e5646"; tx.lineWidth=0.8; tx.strokeRect(-w/2,-h/2,w,h);
+    tx.strokeStyle="rgba(70,62,48,0.7)"; tx.lineWidth=0.5;
+    tx.beginPath(); tx.moveTo(-w/2+2,0); tx.lineTo(w/2-2,0); tx.moveTo(0,-h/2+2); tx.lineTo(0,h/2-2); tx.stroke();
+    tx.fillStyle="rgba(255,245,220,0.25)"; tx.fillRect(-w/2,-h/2,w,1);
     tx.restore();
   }
+  function drawPipe(tx,pts){
+    function run(style,width,dx,dy){
+      tx.strokeStyle=style; tx.lineWidth=width;
+      tx.beginPath(); pts.forEach(function(p,i){ i?tx.lineTo(p[0]+dx,p[1]+dy):tx.moveTo(p[0]+dx,p[1]+dy); }); tx.stroke();
+    }
+    tx.save(); tx.lineCap="round"; tx.lineJoin="round";
+    run("rgba(90,45,15,0.35)",4.5,1.5,1.5);
+    run("#6f6d66",3.6,0,0);
+    run("rgba(215,210,195,0.8)",1,-0.6,-0.6);
+    tx.fillStyle="#56544e";
+    pts.forEach(function(p){ tx.beginPath(); tx.arc(p[0],p[1],2.4,0,Math.PI*2); tx.fill(); });
+    tx.restore();
+  }
+  function drawCrate(tx,x,y){
+    tx.fillStyle="rgba(90,45,15,0.35)"; tx.fillRect(x-6,y-3,15,11);
+    tx.fillStyle="#6d6b4b"; tx.fillRect(x-7.5,y-5,15,10);
+    tx.fillStyle="#86845f"; tx.fillRect(x-7.5,y-5,15,2.5);
+    tx.strokeStyle="#3f3e2b"; tx.lineWidth=0.8; tx.strokeRect(x-7.5,y-5,15,10);
+    tx.beginPath(); tx.arc(x,y+0.5,2.4,0,Math.PI*2); tx.stroke();
+  }
 
-  function drawPathInto(tx){
+  function strokePath(tx){ tx.beginPath(); path.forEach(function(pt,i){ i===0?tx.moveTo(pt[0],pt[1]):tx.lineTo(pt[0],pt[1]); }); tx.stroke(); }
+  function drawClawPrint(tx,x,y,a){
+    tx.save(); tx.translate(x,y); tx.rotate(a);
+    tx.fillStyle="rgba(46,34,25,0.72)";
+    tx.beginPath(); tx.ellipse(0,0,2.4,1.5,0,0,Math.PI*2); tx.fill();
+    tx.strokeStyle="rgba(46,34,25,0.78)"; tx.lineWidth=0.9;
+    for(var k=-1;k<=1;k++){ tx.beginPath(); tx.moveTo(1.6,k*1.1); tx.lineTo(4.6,k*2.3); tx.stroke(); }
+    tx.restore();
+  }
+  function drawTrail(tx,R){
     tx.save();
     tx.lineCap="round"; tx.lineJoin="round";
-    tx.strokeStyle="#161409"; tx.lineWidth=TILE*0.92;
-    tx.beginPath(); path.forEach(function(pt,i){ i===0?tx.moveTo(pt[0],pt[1]):tx.lineTo(pt[0],pt[1]); }); tx.stroke();
-    tx.strokeStyle="#26261a"; tx.lineWidth=TILE*0.78;
-    tx.beginPath(); path.forEach(function(pt,i){ i===0?tx.moveTo(pt[0],pt[1]):tx.lineTo(pt[0],pt[1]); }); tx.stroke();
-    tx.strokeStyle="rgba(150,138,100,0.14)"; tx.lineWidth=TILE*0.36;
-    tx.beginPath(); path.forEach(function(pt,i){ i===0?tx.moveTo(pt[0],pt[1]):tx.lineTo(pt[0],pt[1]); }); tx.stroke();
-
+    // trampled, darker sand spilling around the trail
+    tx.strokeStyle="rgba(140,82,40,0.32)"; tx.lineWidth=TILE*1.2; strokePath(tx);
     for(var i=0;i<path.length-1;i++){
-      var x1=path[i][0],y1=path[i][1],x2=path[i+1][0],y2=path[i+1][1];
-      var dist=Math.hypot(x2-x1,y2-y1);
-      var ux=(x2-x1)/dist, uy=(y2-y1)/dist, nx=-uy, ny=ux, half=TILE*0.46;
-      tx.strokeStyle="rgba(210,198,160,0.16)"; tx.lineWidth=2;
-      tx.beginPath(); tx.moveTo(x1+nx*half,y1+ny*half); tx.lineTo(x2+nx*half,y2+ny*half); tx.stroke();
-      tx.strokeStyle="rgba(0,0,0,0.35)"; tx.lineWidth=3;
-      tx.beginPath(); tx.moveTo(x1-nx*half,y1-ny*half); tx.lineTo(x2-nx*half,y2-ny*half); tx.stroke();
+      var x1=path[i][0], y1=path[i][1], x2=path[i+1][0], y2=path[i+1][1];
+      var len=Math.hypot(x2-x1,y2-y1), ux=(x2-x1)/len, uy=(y2-y1)/len, nx=-uy, ny=ux;
+      for(var s=0;s<=len;s+=5){
+        [-1,1].forEach(function(side){
+          var off=TILE*0.42+R()*3.5, rr=2.5+R()*3.5;
+          tx.fillStyle="#7d6653";
+          tx.beginPath(); tx.arc(x1+ux*s+nx*off*side, y1+uy*s+ny*off*side, rr, 0, Math.PI*2); tx.fill();
+        });
+      }
     }
+    tx.strokeStyle="#7d6653"; tx.lineWidth=TILE*0.86; strokePath(tx);
+    tx.strokeStyle="#6f5a48"; tx.lineWidth=TILE*0.62; strokePath(tx);
 
-    tx.strokeStyle="#f0b400"; tx.lineWidth=3;
-    tx.setLineDash([14,12]); tx.globalAlpha=0.5;
-    tx.beginPath(); path.forEach(function(pt,i){ i===0?tx.moveTo(pt[0],pt[1]):tx.lineTo(pt[0],pt[1]); }); tx.stroke();
-    tx.setLineDash([]); tx.globalAlpha=1;
+    for(var j=0;j<path.length-1;j++){
+      var ax=path[j][0], ay=path[j][1], bx=path[j+1][0], by=path[j+1][1];
+      var L=Math.hypot(bx-ax,by-ay), vx=(bx-ax)/L, vy=(by-ay)/L, px=-vy, py=vx, ang=Math.atan2(vy,vx);
+      // drag ripples across the trail
+      for(var q=4;q<L;q+=8){
+        var cx=ax+vx*q, cy=ay+vy*q, w=TILE*0.3;
+        tx.strokeStyle=R()<0.5?"rgba(160,132,104,0.2)":"rgba(40,30,22,0.2)"; tx.lineWidth=0.8;
+        tx.beginPath(); tx.moveTo(cx-px*w,cy-py*w); tx.quadraticCurveTo(cx+vx*2,cy+vy*2,cx+px*w,cy+py*w); tx.stroke();
+      }
+      // claw prints along the march, alternating sides
+      for(var f=6, alt=1; f<L; f+=11, alt=-alt){
+        drawClawPrint(tx, ax+vx*f+px*alt*(5+R()*3), ay+vy*f+py*alt*(5+R()*3), ang+(R()-0.5)*0.4);
+      }
+    }
+    drawSlime(tx,R);
     tx.restore();
+  }
+  // green bug slime smeared along both edges of the trail, in broken runs with blobs and drips
+  function drawSlime(tx,R){
+    function flush(pts){
+      function run(style,width,dx,dy){
+        tx.strokeStyle=style; tx.lineWidth=width;
+        tx.beginPath(); pts.forEach(function(p,i){ i?tx.lineTo(p[0]+dx,p[1]+dy):tx.moveTo(p[0]+dx,p[1]+dy); }); tx.stroke();
+      }
+      run("#3f6a17",3.4,0.4,0.6);
+      run("#76b22b",2.2,0,0);
+      run("rgba(205,248,120,0.85)",0.7,-0.5,-0.5);
+      pts.forEach(function(p){
+        if(R()<0.12){
+          var rr=1.4+R()*2;
+          tx.fillStyle="#6fab28"; tx.beginPath(); tx.arc(p[0],p[1],rr,0,Math.PI*2); tx.fill();
+          tx.fillStyle="rgba(235,255,210,0.9)"; tx.beginPath(); tx.arc(p[0]-rr*0.35,p[1]-rr*0.35,rr*0.3,0,Math.PI*2); tx.fill();
+        }
+      });
+    }
+    for(var i=0;i<path.length-1;i++){
+      var x1=path[i][0], y1=path[i][1], x2=path[i+1][0], y2=path[i+1][1];
+      var len=Math.hypot(x2-x1,y2-y1), ux=(x2-x1)/len, uy=(y2-y1)/len, nx=-uy, ny=ux;
+      [-1,1].forEach(function(side){
+        var on=R()<0.6, left=10+R()*30, pts=[];
+        for(var s=0;s<=len;s+=3){
+          left-=3;
+          if(left<=0){
+            if(on && pts.length>1) flush(pts);
+            pts=[]; on=!on; left=on ? 14+R()*40 : 8+R()*26;
+          }
+          if(on){
+            var off=TILE*0.4+Math.sin(s*0.3+i)*1.4+(R()-0.5)*1.4;
+            pts.push([x1+ux*s+nx*off*side, y1+uy*s+ny*off*side]);
+          }
+        }
+        if(on && pts.length>1) flush(pts);
+      });
+    }
   }
 
   function buildTerrainCanvas(){
+    var R=seeded(20260923);
     var tc=document.createElement("canvas");
-    tc.width=CW; tc.height=CH;
+    tc.width=CW*TERRAIN_SCALE; tc.height=CH*TERRAIN_SCALE;
     var tx=tc.getContext("2d");
+    tx.scale(TERRAIN_SCALE,TERRAIN_SCALE);
 
-    for(var r=0;r<ROWS;r++){
-      for(var c=0;c<COLS;c++){
-        tx.fillStyle= buildable[r][c] ? (((c+r)%2===0)?"#1a1a12":"#1e1f15") : "#141410";
-        tx.fillRect(c*TILE,r*TILE,TILE,TILE);
-      }
+    var base=tx.createLinearGradient(0,0,CW,CH);
+    base.addColorStop(0,"#dc9c5e"); base.addColorStop(1,"#c3814a");
+    tx.fillStyle=base; tx.fillRect(0,0,CW,CH);
+
+    // dune bodies: sunlit crest with a shaded lee side
+    for(var d=0;d<18;d++){
+      var cx=R()*CW, cy=R()*CH, rx=90+R()*130, ry=30+R()*50, ang=-0.4+(R()-0.5)*0.5;
+      tx.save(); tx.translate(cx,cy); tx.rotate(ang);
+      var lg=tx.createRadialGradient(-rx*0.2,-ry*0.3,0,0,0,rx);
+      lg.addColorStop(0,"rgba(255,222,170,0.2)"); lg.addColorStop(1,"rgba(255,222,170,0)");
+      tx.fillStyle=lg; tx.beginPath(); tx.ellipse(0,0,rx,ry,0,0,Math.PI*2); tx.fill();
+      var sg=tx.createRadialGradient(rx*0.25,ry*0.55,0,rx*0.25,ry*0.55,rx*0.7);
+      sg.addColorStop(0,"rgba(140,70,26,0.16)"); sg.addColorStop(1,"rgba(140,70,26,0)");
+      tx.fillStyle=sg; tx.beginPath(); tx.ellipse(rx*0.25,ry*0.55,rx*0.7,ry*0.6,0,0,Math.PI*2); tx.fill();
+      tx.restore();
     }
 
-    for(var d=0;d<7;d++){
-      drawDune(tx, Math.random()*CW, Math.random()*CH, 90+Math.random()*140, 40+Math.random()*70, Math.random()*Math.PI);
+    // wind ripples
+    for(var r=0;r<1400;r++){
+      var x=R()*CW, y=R()*CH, a=-0.35+(R()-0.5)*0.45, l=10+R()*26;
+      var ex=x+Math.cos(a)*l, ey=y+Math.sin(a)*l, mx=x+Math.cos(a)*l/2+Math.sin(a)*2.5, my=y+Math.sin(a)*l/2-Math.cos(a)*2.5;
+      tx.lineWidth=0.7;
+      tx.strokeStyle="rgba(255,236,196,0.3)";
+      tx.beginPath(); tx.moveTo(x,y); tx.quadraticCurveTo(mx,my,ex,ey); tx.stroke();
+      tx.strokeStyle="rgba(125,64,28,0.22)";
+      tx.beginPath(); tx.moveTo(x+0.8,y+0.9); tx.quadraticCurveTo(mx+0.8,my+0.9,ex+0.8,ey+0.9); tx.stroke();
+    }
+    // grain
+    for(var g=0;g<14000;g++){
+      tx.fillStyle=R()<0.5 ? "rgba(255,238,205,"+(0.15+R()*0.25).toFixed(2)+")" : "rgba(110,55,20,"+(0.12+R()*0.22).toFixed(2)+")";
+      tx.fillRect(R()*CW,R()*CH,0.5,0.5);
+    }
+    for(var t=0;t<70;t++){ var tx0=R()*CW, ty0=R()*CH; if(clearSpot(tx0,ty0,4)) drawTuft(tx,tx0,ty0,R); }
+    for(var p=0;p<420;p++){ var px=R()*CW, py=R()*CH; if(clearSpot(px,py,0)) drawPebble(tx,px,py,0.8+R()*1.5,R); }
+    // sandstone boulder clusters
+    for(var c=0;c<22;c++){
+      var kx=R()*CW, ky=R()*CH;
+      if(!clearSpot(kx,ky,18)) continue;
+      var n=3+Math.floor(R()*5);
+      for(var k=0;k<n;k++) drawSandRock(tx,kx+(R()-0.5)*26,ky+(R()-0.5)*18,3+R()*6,R);
+    }
+    // outpost debris: metal plates, pipe runs, supply crates
+    var debris=0;
+    for(var tries=0;tries<200 && debris<12;tries++){
+      var dx=R()*CW, dy=R()*CH;
+      if(!clearSpot(dx,dy,14)) continue;
+      var kind=debris%3;
+      if(kind===0) drawPlate(tx,dx,dy,8+R()*8,5+R()*5,R()*Math.PI);
+      else if(kind===1){ var len=18+R()*22, a2=R()<0.5?0:Math.PI/2; drawPipe(tx,[[dx,dy],[dx+Math.cos(a2)*len,dy+Math.sin(a2)*len],[dx+Math.cos(a2)*len+Math.cos(a2+Math.PI/2)*10,dy+Math.sin(a2)*len+Math.sin(a2+Math.PI/2)*10]]); }
+      else drawCrate(tx,dx,dy);
+      debris++;
     }
 
-    var amb=tx.createLinearGradient(0,0,CW,CH);
-    amb.addColorStop(0,"rgba(255,244,214,0.05)");
-    amb.addColorStop(1,"rgba(0,0,0,0.22)");
-    tx.fillStyle=amb;
-    tx.fillRect(0,0,CW,CH);
+    drawTrail(tx,R);
 
-    tx.strokeStyle="rgba(255,255,255,0.025)";
-    for(var c2=0;c2<=COLS;c2++){ tx.beginPath();tx.moveTo(c2*TILE,0);tx.lineTo(c2*TILE,CH);tx.stroke(); }
-    for(var r2=0;r2<=ROWS;r2++){ tx.beginPath();tx.moveTo(0,r2*TILE);tx.lineTo(CW,r2*TILE);tx.stroke(); }
+    // faint build grid so tiles can still be read
+    tx.strokeStyle="rgba(90,45,15,0.07)"; tx.lineWidth=0.6;
+    for(var c2=0;c2<=COLS;c2++){ tx.beginPath(); tx.moveTo(c2*TILE,0); tx.lineTo(c2*TILE,CH); tx.stroke(); }
+    for(var r2=0;r2<=ROWS;r2++){ tx.beginPath(); tx.moveTo(0,r2*TILE); tx.lineTo(CW,r2*TILE); tx.stroke(); }
 
-    for(var r3=0;r3<ROWS;r3++){
-      for(var c3=0;c3<COLS;c3++){
-        if(!buildable[r3][c3]) continue;
-        var cx=c3*TILE+TILE/2, cy=r3*TILE+TILE/2;
-        var roll=Math.random();
-        if(roll<0.08) drawRock(tx,cx+(Math.random()-0.5)*10,cy+(Math.random()-0.5)*10,6+Math.random()*4);
-        else if(roll<0.12) drawCrater(tx,cx,cy,6+Math.random()*4);
-      }
-    }
-
-    drawPathInto(tx);
-
-
+    var vg=tx.createRadialGradient(CW/2,CH/2,Math.min(CW,CH)*0.35,CW/2,CH/2,Math.max(CW,CH)*0.72);
+    vg.addColorStop(0,"rgba(60,28,8,0)"); vg.addColorStop(1,"rgba(60,28,8,0.28)");
+    tx.fillStyle=vg; tx.fillRect(0,0,CW,CH);
     return tc;
   }
 
   var terrainCanvas=buildTerrainCanvas();
   var terrainTexture=new THREE.CanvasTexture(terrainCanvas);
   if(THREE.sRGBEncoding) terrainTexture.encoding=THREE.sRGBEncoding;
+  terrainTexture.anisotropy=renderer.capabilities.getMaxAnisotropy();
   var ground=new THREE.Mesh(
     new THREE.PlaneGeometry(CW,CH),
     new THREE.MeshStandardMaterial({map:terrainTexture, roughness:0.95})
@@ -2222,6 +2397,19 @@
   ground.position.set(CW/2,0,CH/2);
   ground.receiveShadow=true;
   scene.add(ground);
+
+  // the map is a thick slab of layered earth, like the terrain dioramas
+  var groundSlab=new THREE.Mesh(new THREE.BoxGeometry(CW,26,CH), new THREE.MeshStandardMaterial({
+    map:(function(){
+      var c=document.createElement("canvas"); c.width=16; c.height=64;
+      var g=c.getContext("2d");
+      [["#8a5a33",0,14],["#6e4527",14,24],["#7d5030",24,38],["#553520",38,52],["#3e2716",52,64]].forEach(function(b){ g.fillStyle=b[0]; g.fillRect(0,b[1],16,b[2]-b[1]); });
+      var t=new THREE.CanvasTexture(c); if(THREE.sRGBEncoding) t.encoding=THREE.sRGBEncoding; return t;
+    })(), roughness:1
+  }));
+  groundSlab.position.set(CW/2,-13.2,CH/2);
+  groundSlab.renderOrder=-2;
+  scene.add(groundSlab);
 
   // simple procedural base, only used if the base artwork can't be loaded
   function buildBaseMesh(){
@@ -2551,6 +2739,144 @@
     });
   }
 
+  // ---------------- terrain dioramas: bug nest (spawn), impact crater, high-ground mesa ----------------
+  // Same technique as the base: a camera-facing card of isometric art, anchored on the centre of its ground
+  // footprint and slid toward the camera so it never clips into the terrain. o.k = world units per image pixel.
+  function Diorama(o){
+    var d={o:o, W:o.imgW*o.k, H:o.imgH*o.k, restPos:new THREE.Vector3(), ready:false};
+    d.sprite=new THREE.Sprite(new THREE.SpriteMaterial({transparent:false, alphaTest:0.5, depthWrite:false}));
+    d.sprite.renderOrder=-1;
+    d.sprite.visible=false;
+    scene.add(d.sprite);
+    d.point=function(px,py,out){
+      return (out||new THREE.Vector3()).copy(d.restPos)
+        .addScaledVector(_camR,(px/o.imgW-o.fu)*d.W)
+        .addScaledVector(_camU,((1-py/o.imgH)-o.fv)*d.H)
+        .addScaledVector(_camF,-4);
+    };
+    new THREE.TextureLoader().load(o.file, function(tex){
+      if(THREE.sRGBEncoding) tex.encoding=THREE.sRGBEncoding;
+      readCameraAxes();
+      d.sprite.material.map=tex; d.sprite.material.needsUpdate=true;
+      d.sprite.center.set(o.fu,o.fv);
+      d.sprite.scale.set(d.W,d.H,1);
+      var t=o.fv*d.H*_camU.y/(-_camF.y);
+      d.restPos.set(o.x,0,o.z).addScaledVector(_camF,-t);
+      d.sprite.position.copy(d.restPos);
+      d.sprite.visible=true;
+      d.ready=true;
+      if(o.onReady) o.onReady(d);
+    });
+    return d;
+  }
+  function markUnbuildable(c0,c1,r0,r1,keep){
+    for(var r=r0;r<=r1;r++) for(var c=c0;c<=c1;c++){
+      if(c>=0&&c<COLS&&r>=0&&r<ROWS && !(keep&&keep[c+","+r])) buildable[r][c]=false;
+    }
+  }
+  function glowSprite(color,size){
+    var s=new THREE.Sprite(new THREE.SpriteMaterial({map:fireTex, color:color, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false}));
+    s.scale.set(size,size,1);
+    scene.add(s);
+    return s;
+  }
+  var _fp=new THREE.Vector3();
+
+  // --- bug nest at the start of the trail: glowing eggs that hatch as bugs come out ---
+  var NEST_SIDE=110;
+  var NEST_EGGS=[[365,395],[405,360],[420,390],[455,340],[482,370],[390,440],[452,415]];
+  var nestEggs=[], nestMistT=0;
+  var nest=Diorama({file:"assets/terrain/nest.png", imgW:800, imgH:655, fu:0.5, fv:0.537,
+    k:NEST_SIDE*Math.SQRT2/800, x:NEST_CENTER.x, z:NEST_CENTER.z,
+    onReady:function(d){
+      NEST_EGGS.forEach(function(p){
+        var s=glowSprite(0x7dff5a,9);
+        d.point(p[0],p[1],s.position);
+        nestEggs.push({sprite:s, phase:Math.random()*6, cool:0});
+      });
+    }});
+  markUnbuildable(0,1,1,3);
+  function nestHatch(){
+    if(!nest.ready || !nestEggs.length) return;
+    var ready=nestEggs.filter(function(e){ return e.cool<=0; });
+    var egg=(ready.length?ready:nestEggs)[Math.floor(Math.random()*(ready.length||nestEggs.length))];
+    egg.cool=2.6;
+    var p=egg.sprite.position;
+    spawnMuzzleFlash(p,22,0x9dff6a,0.25);
+    spawnSparks(p.x,p.y,p.z,6,0x8cff4a,70);
+    spawnSmoke(p.x,p.y,p.z,8,0.7,{color:0x6fae3a, opacity:0.35, rise:12});
+  }
+
+  // --- impact crater: smouldering fires and smoke columns ---
+  var CRATER_SIDE=115;
+  var CRATER_FIRES=[[330,325,1],[420,265,0.8],[495,210,0.9],[420,370,0.7]];
+  var CRATER_SMOKE=[[410,125],[360,160],[500,150]];
+  var craterFireT=[], craterSmokeT=[];
+  var crater=Diorama({file:"assets/terrain/crater.png", imgW:800, imgH:582, fu:0.506, fv:0.55,
+    k:CRATER_SIDE*Math.SQRT2/800, x:CRATER_CENTER.x, z:CRATER_CENTER.z});
+  markUnbuildable(0,2,10,12);
+
+  // --- high-ground mesa: the 2x2 plateau on top takes towers, which get +20% range ---
+  // Measured on the art: ground-footprint centre (450,500), plateau centre (441,214), plateau width 440px.
+  var mesaK=(2*TILE*Math.SQRT2)/440;
+  var MESA_H=(500-214)*mesaK/Math.cos(ISO_ELEV);
+  var HIGH_TILES={"5,6":1,"6,6":1,"5,7":1,"6,7":1};
+  var HIGH_GROUND_RANGE=1.2;
+  var MESA_PADS=[[360,195],[452,142],[545,212]];
+  var mesaPads=[];
+  var mesa=Diorama({file:"assets/terrain/high_ground.png", imgW:900, imgH:841, fu:0.5, fv:1-500/841,
+    k:mesaK, x:MESA_CENTER.x, z:MESA_CENTER.z,
+    onReady:function(d){
+      MESA_PADS.forEach(function(p,i){
+        var s=glowSprite(0x58e6ff,16);
+        d.point(p[0],p[1],s.position);
+        mesaPads.push({sprite:s, phase:i*1.3});
+      });
+    }});
+  markUnbuildable(4,7,5,8,HIGH_TILES);
+  function isHighTile(c,r){ return !!HIGH_TILES[c+","+r]; }
+  function tileHeight(c,r){ return isHighTile(c,r) ? MESA_H : 0; }
+
+  function syncTerrainFeatures(now, gdt){
+    var t=now*0.001;
+    nestEggs.forEach(function(e){
+      if(e.cool>0) e.cool-=gdt;
+      var base=0.45+0.25*Math.sin(t*3+e.phase);
+      e.sprite.material.opacity = e.cool>0 ? Math.max(0, 1-e.cool/0.6)*base : base;
+      var sc=9*(1+0.12*Math.sin(t*3+e.phase));
+      e.sprite.scale.set(sc,sc,1);
+    });
+    mesaPads.forEach(function(p){ p.sprite.material.opacity=0.25+0.2*Math.sin(t*2+p.phase); });
+    if(gdt<=0) return;
+    if(nest.ready){
+      nestMistT-=gdt;
+      if(nestMistT<=0){
+        nestMistT=0.45;
+        nest.point(400,300,_fp);
+        spawnSmoke(_fp.x,_fp.y,_fp.z,10,1.4,{color:0x6fae3a, opacity:0.22, rise:10});
+      }
+    }
+    if(crater.ready){
+      CRATER_FIRES.forEach(function(f,i){
+        craterFireT[i]=(craterFireT[i]||0)-gdt;
+        if(craterFireT[i]<=0){
+          craterFireT[i]=0.06+Math.random()*0.05;
+          crater.point(f[0]+(Math.random()-0.5)*14,f[1],_fp);
+          spawnFire(_fp.x,_fp.y,_fp.z,(Math.random()-0.5)*6,16+Math.random()*16,(Math.random()-0.5)*6,(2.5+Math.random()*2)*f[2],0.5+Math.random()*0.2);
+        }
+      });
+      CRATER_SMOKE.forEach(function(s,i){
+        craterSmokeT[i]=(craterSmokeT[i]===undefined ? i*0.2 : craterSmokeT[i])-gdt;
+        if(craterSmokeT[i]<=0){
+          craterSmokeT[i]=0.5+Math.random()*0.3;
+          crater.point(s[0],s[1],_fp);
+          spawnSmoke(_fp.x,_fp.y,_fp.z,8+Math.random()*5,2+Math.random()*0.6,{color:0x5e5b52, opacity:0.5, rise:22, vx:5, vz:-2});
+        }
+      });
+      if(Math.random()<0.05){ crater.point(350+Math.random()*200,200+Math.random()*150,_fp); spawnSparks(_fp.x,_fp.y,_fp.z,2,0xffb050,50); }
+    }
+  }
+
   function baseStageFor(hp){ return hp<=0?4 : hp<=5?3 : hp<=10?2 : hp<=15?1 : 0; }
   var SHAKE_AMP=[0,0.45,1.0,1.8,2.2];
   var SMOKE_COUNT=[0,3,6,9,9];
@@ -2688,18 +3014,19 @@
     var cost=currentCost(state.armedType);
     var ok=buildable[hoverRow] && buildable[hoverRow][hoverCol] && !towerGrid.has(key(hoverCol,hoverRow)) && state.money>=cost;
     var cx=hoverCol*TILE+TILE/2, cz=hoverRow*TILE+TILE/2;
+    var hy=tileHeight(hoverCol,hoverRow);
     if(def.range<999){
-      pathFromPoints(projectCirclePath(cx,cz,def.range,40));
+      pathFromPoints(projectCirclePath(cx,cz,def.range*(hy?HIGH_GROUND_RANGE:1),40));
       ctx.fillStyle= ok?"rgba(240,180,0,0.10)":"rgba(209,58,38,0.10)";
       ctx.fill();
       ctx.strokeStyle= ok?"rgba(240,180,0,0.6)":"rgba(209,58,38,0.6)";
       ctx.stroke();
     }
     var tilePts=[
-      worldToScreen(hoverCol*TILE+4,0,hoverRow*TILE+4),
-      worldToScreen(hoverCol*TILE+TILE-4,0,hoverRow*TILE+4),
-      worldToScreen(hoverCol*TILE+TILE-4,0,hoverRow*TILE+TILE-4),
-      worldToScreen(hoverCol*TILE+4,0,hoverRow*TILE+TILE-4)
+      worldToScreen(hoverCol*TILE+4,hy,hoverRow*TILE+4),
+      worldToScreen(hoverCol*TILE+TILE-4,hy,hoverRow*TILE+4),
+      worldToScreen(hoverCol*TILE+TILE-4,hy,hoverRow*TILE+TILE-4),
+      worldToScreen(hoverCol*TILE+4,hy,hoverRow*TILE+TILE-4)
     ];
     pathFromPoints(tilePts);
     ctx.fillStyle= ok?"rgba(240,180,0,0.35)":"rgba(209,58,38,0.35)";
@@ -2712,7 +3039,7 @@
       ctx.strokeStyle="rgba(240,234,210,0.35)";
       ctx.stroke();
     }
-    var anchor=worldToScreen(t.x,2,t.y+26);
+    var anchor=worldToScreen(t.x,tileHeight(t.col,t.row)+2,t.y+26);
     for(var lv=0;lv<t.level;lv++){
       ctx.fillStyle="#f0b400";
       ctx.fillRect(anchor.x-14+lv*7,anchor.y,5,3);
@@ -2855,6 +3182,7 @@
       '<div class="row"><span>Dano</span><b>'+towerStat(t,"damage").toFixed(0)+'</b></div>'+
       '<div class="row"><span>Alcance</span><b>'+(towerStat(t,"range")>999?"∞":towerStat(t,"range").toFixed(0))+'</b></div>'+
       '<div class="row"><span>Investido</span><b>'+t.invested+'¢</b></div>'+
+      (t.high ? '<div class="row"><span>Terreno elevado</span><b>+20% alcance</b></div>' : '')+
       modeRow+
       '<div class="selected-actions">'+
         '<button class="btn primary small" id="sel-upgrade" '+(maxed?"disabled":"")+'>'+(maxed?"Nível máx.":"Melhorar ("+cost+"¢)")+'</button>'+
@@ -2942,6 +3270,7 @@
     syncProjectiles(gdt);
     syncMeshes(now, gdt);
     syncBase(now, gdt);
+    syncTerrainFeatures(now, gdt);
     positionIsoCamera(shakeDX,shakeDY);
     renderer.render(scene,camera);
     drawOverlay(now);
