@@ -961,180 +961,472 @@
   fillLight.position.set(-CW*0.2,300,-CH*0.1);
   scene.add(fillLight);
 
+  function isShared(o){ return !!(o && o.userData && o.userData.shared); }
   function disposeMesh(mesh){
     mesh.traverse(function(obj){
-      if(obj.geometry) obj.geometry.dispose();
+      // sprites share one internal geometry across the whole scene; never dispose it
+      if(obj.geometry && !obj.isSprite && !isShared(obj.geometry)) obj.geometry.dispose();
       if(obj.material){
-        if(Array.isArray(obj.material)) obj.material.forEach(function(m){ m.dispose(); });
-        else obj.material.dispose();
+        (Array.isArray(obj.material)?obj.material:[obj.material]).forEach(function(m){ if(!isShared(m)) m.dispose(); });
       }
     });
   }
 
-  // ---------------- tower sprites (arsenal art pack, falls back to procedural mesh if unavailable) ----------------
-  var SPRITE_BASE="assets/towers/";
-  var SPRITE_FILES={
-    mi9_l1:{file:"mi9_l1.png", w:450, h:480},
-    mi9_l2:{file:"mi9_l2.png", w:480, h:459},
-    mi9_l3:{file:"mi9_l3.png", w:480, h:432},
-    mi9_l3_firing:{file:"mi9_l3_firing.png", w:480, h:412},
-    morita:{file:"morita_l1.png", w:480, h:336},
-    tx7:{file:"tx7_l1.png", w:480, h:371},
-    yrex:{file:"yrex_l1.png", w:444, h:480},
-    orbital:{file:"orbital_l1.png", w:314, h:480}
-  };
-  var spriteTextures={}, spriteTexturesFlipped={};
-  (function loadSprites(){
-    var loader=new THREE.TextureLoader();
-    Object.keys(SPRITE_FILES).forEach(function(key){
-      loader.load(SPRITE_BASE+SPRITE_FILES[key].file, function(tex){
-        if(THREE.sRGBEncoding) tex.encoding=THREE.sRGBEncoding;
-        spriteTextures[key]=tex;
-        var flipped=tex.clone();
-        flipped.repeat.x=-1; flipped.offset.x=1; flipped.needsUpdate=true;
-        spriteTexturesFlipped[key]=flipped;
-      }, undefined, function(){ /* asset unavailable — tower keeps its procedural mesh */ });
+  // ---------------- tower models ----------------
+  // Geometry/material caches are shared: towers are rebuilt on every upgrade and there can be dozens of them.
+  var SHARED_GEO={}, SHARED_MAT={};
+  function sgeo(key, make){
+    var g=SHARED_GEO[key];
+    if(!g){ g=make(); g.userData.shared=true; SHARED_GEO[key]=g; }
+    return g;
+  }
+  function smat(hex, opts){
+    var key=hex+"|"+(opts?JSON.stringify(opts):"");
+    var m=SHARED_MAT[key];
+    if(!m){
+      var o={color:hex, roughness:0.62, metalness:0.25};
+      if(opts) for(var k in opts) o[k]=opts[k];
+      m=new THREE.MeshStandardMaterial(o);
+      m.userData.shared=true;
+      SHARED_MAT[key]=m;
+    }
+    return m;
+  }
+  function gBox(w,h,d){ return sgeo("b"+w+","+h+","+d, function(){ return new THREE.BoxGeometry(w,h,d); }); }
+  function gCyl(rt,rb,h,seg){ seg=seg||12; return sgeo("c"+rt+","+rb+","+h+","+seg, function(){ return new THREE.CylinderGeometry(rt,rb,h,seg); }); }
+  function gCone(r,h,seg){ seg=seg||10; return sgeo("k"+r+","+h+","+seg, function(){ return new THREE.ConeGeometry(r,h,seg); }); }
+  function gSphere(r,ws,hs,cap){
+    return sgeo("s"+r+","+ws+","+hs+","+(cap||0), function(){
+      return cap ? new THREE.SphereGeometry(r,ws,hs,0,Math.PI*2,0,cap) : new THREE.SphereGeometry(r,ws,hs);
     });
-  })();
-  // which way the barrel points in the source art; the sprite is mirrored when the target is on the other side
-  var ART_FACES_LEFT={mi9_l1:true, mi9_l2:true, mi9_l3:true, mi9_l3_firing:true, morita:false, tx7:true, yrex:true, orbital:false};
-  var FLASH_CFG={gunner:{size:18,color:0xffe7a0}, heavy:{size:30,color:0xffc070}, rocket:{size:26,color:0xff9050}, flame:{size:24,color:0xff8a30}, orbital:{size:44,color:0xfff2c0}};
-  var glowTexture=(function(){
+  }
+  function part(geo, mat, x,y,z, parent){
+    var m=new THREE.Mesh(geo,mat);
+    m.position.set(x,y,z);
+    m.castShadow=true; m.receiveShadow=true;
+    parent.add(m);
+    return m;
+  }
+  // cylinder lying along +x (barrels, tanks), starting at x0
+  function rodX(parent, r, len, x0, y, z, mat, seg){
+    var m=part(gCyl(r,r,len,seg||10), mat, x0+len/2, y, z, parent);
+    m.rotation.z=-Math.PI/2;
+    return m;
+  }
+  // beam between two points; only valid while the parent chain is still at the origin (i.e. during build)
+  function strut(parent, from, to, thick, mat){
+    var dx=to[0]-from[0], dy=to[1]-from[1], dz=to[2]-from[2];
+    var len=Math.round(Math.sqrt(dx*dx+dy*dy+dz*dz)*10)/10;
+    var m=part(gBox(thick,thick,len), mat, (from[0]+to[0])/2, (from[1]+to[1])/2, (from[2]+to[2])/2, parent);
+    m.lookAt(to[0],to[1],to[2]);
+    return m;
+  }
+  function marker(parent,x,y,z,list){
+    var o=new THREE.Object3D(); o.position.set(x,y,z); parent.add(o); list.push(o); return o;
+  }
+
+  var PAL={
+    olive:0x59633b, oliveDark:0x3b4228, steel:0x2b2d2b, black:0x1a1b18,
+    grey:0x74776f, greyLight:0xb9bab3, white:0xd8d9d2, orange:0xd8822a, red:0xb02a20, brass:0xb18a3c
+  };
+  function M(name){
+    var metal=name==="steel"||name==="black";
+    return smat(PAL[name], metal?{metalness:0.6, roughness:0.4}:null);
+  }
+  function foundation(root, r){
+    part(gCyl(r,r+1.5,1.6,16), smat(0x1c1d16,{roughness:0.9}), 0,0.8,0, root);
+    part(gCyl(r-3,r-3,0.4,16), smat(0x2c2d22,{roughness:0.85}), 0,1.8,0, root);
+  }
+
+  // Posto MI-9: tripod twin MG (Mk1) -> armored emplacement with rotary guns (Mk2) -> quad rotary + recon drone (Mk3)
+  function buildGunner(root, turret, level, tu){
+    var olive=M("olive"), oliveD=M("oliveDark"), steel=M("steel"), black=M("black");
+    if(level===1){
+      foundation(root,15);
+      part(gCyl(2.6,3.2,12,10), oliveD, 0,8,0, root);
+      [0.35, 0.35+2.094, 0.35+4.189].forEach(function(a){
+        var fx=Math.cos(a)*14, fz=Math.sin(a)*14;
+        strut(root,[Math.cos(a)*2,11,Math.sin(a)*2],[fx,2.4,fz],2.2,olive);
+        part(gBox(5,1.4,5), black, fx,2.3,fz, root);
+      });
+      turret.position.y=15;
+      part(gCyl(4,4,2,12), black, 0,0,0, turret);
+      part(gBox(14,6,8), olive, 1,4,0, turret);
+      part(gBox(9,6,7), olive, -3,4,-8.5, turret);
+      part(gBox(9.4,1,7.4), oliveD, -3,7.3,-8.5, turret);
+      part(gBox(3,3,3), black, 3,8.5,2.5, turret);
+      [-2,2].forEach(function(z){
+        var b=rodX(turret,1,20,7,4.5,z,steel);
+        tu.recoil.push({obj:b, base:b.position.x, k:0.8});
+        marker(turret,28,4.5,z,tu.muzzles);
+      });
+      return;
+    }
+    var big=level===3;
+    foundation(root, big?18:16);
+    part(gCyl(big?14:12.5, big?16:14.5, big?11:9, 8), oliveD, 0,(big?5.5:4.5)+1,0, root);
+    part(gCyl(big?11:10, big?11:10, 2.4, 8), black, 0,(big?12.2:10.2),0, root);
+    part(gBox(7,5,6), olive, -9,(big?3.5:3),11, root);
+    if(big){ part(gBox(6,6,6), olive, 11,4,-11, root); part(gBox(6,5,6), oliveD, 5,3.5,13, root); }
+    turret.position.y=big?13.4:11.4;
+    part(gBox(15,9,14), olive, -1,4.5,0, turret);
+    part(gSphere(8,14,8,Math.PI/2), olive, -2,9,0, turret);
+    part(gBox(2,11,15), oliveD, 7,5.5,0, turret);
+    part(gBox(4,3,4), black, -4,15,4, turret);
+    var ys=big?[3.5,8]:[5.5], zs=[-3.4,3.4];
+    ys.forEach(function(y){ zs.forEach(function(z){
+      var g=new THREE.Group(); g.position.set(8,y,z); turret.add(g);
+      for(var i=0;i<6;i++){ var a=i/6*Math.PI*2; rodX(g,0.5,18,0,Math.cos(a)*1.25,Math.sin(a)*1.25,steel,6); }
+      var ring=part(gCyl(1.9,1.9,1.4,10), black, 15,0,0, g); ring.rotation.z=-Math.PI/2;
+      var hub=part(gCyl(2.1,2.1,3,10), steel, 1.5,0,0, g); hub.rotation.z=-Math.PI/2;
+      tu.spinners.push(g);
+      tu.recoil.push({obj:g, base:g.position.x, k:0.6});
+      marker(turret,27,y,z,tu.muzzles);
+    }); });
+    if(big){
+      part(gBox(8,8,7), olive, -6,6,-10, turret);
+      var drone=new THREE.Group(); root.add(drone);
+      part(gBox(6,1.8,4), steel, 0,0,0, drone);
+      [[1,1],[1,-1],[-1,1],[-1,-1]].forEach(function(o){
+        strut(drone,[0,0,0],[o[0]*4.5,0.4,o[1]*4.5],0.8,black);
+        part(gCyl(2.2,2.2,0.3,12), black, o[0]*4.5,0.8,o[1]*4.5, drone);
+      });
+      part(gSphere(0.9,8,6), smat(0xff3b30,{emissive:0xff2a1a, emissiveIntensity:1.6}), 0,-1.4,1.5, drone);
+      root.userData.drone=drone;
+    }
+  }
+
+  // Canhão Morita: legged artillery chassis, long elevated barrel with muzzle brake (twin barrels at Mk3)
+  function buildHeavy(root, turret, level, tu){
+    var olive=M("olive"), oliveD=M("oliveDark"), steel=M("steel"), black=M("black");
+    foundation(root,18);
+    part(gBox(26,4,20), oliveD, 0,4,0, root);
+    part(gBox(22,6,16), olive, 0,9,0, root);
+    [[1,1],[1,-1],[-1,1],[-1,-1]].forEach(function(o){
+      strut(root,[o[0]*9,5,o[1]*7],[o[0]*15,2.2,o[1]*12],3,steel);
+      part(gBox(6,1.6,6), black, o[0]*15,2.2,o[1]*12, root);
+    });
+    if(level>=2){ part(gBox(20,5,1.4), oliveD, 0,8,10.5, root); part(gBox(20,5,1.4), oliveD, 0,8,-10.5, root); }
+    part(gCyl(0.4,0.4,14,4), black, -8,19,6, root);
+    turret.position.y=12;
+    part(gCyl(7,7.5,2,12), black, 0,0.6,0, turret);
+    part(gBox(15,8,14), olive, -2,5,0, turret);
+    var wedge=part(gBox(7,6,12), olive, 6,4,0, turret); wedge.rotation.z=0.4;
+    part(gBox(5,3,5), steel, -6,10,4, turret);
+    var zs=level>=3 ? [-2.8,2.8] : [0];
+    var len=level>=2 ? 30 : 27;
+    zs.forEach(function(z){
+      var pivot=new THREE.Group(); pivot.position.set(5,5.5,z); pivot.rotation.z=0.13; turret.add(pivot);
+      var bg=new THREE.Group(); pivot.add(bg);
+      rodX(bg,1.7,len,0,0,0,steel);
+      var brake=part(gCyl(2.7,2.7,4,10), black, len+1,0,0, bg); brake.rotation.z=-Math.PI/2;
+      var sleeve=part(gCyl(2.6,2.6,7,10), olive, 3.5,0,0, bg); sleeve.rotation.z=-Math.PI/2;
+      tu.recoil.push({obj:bg, base:0, k:0.9});
+      marker(pivot,len+3.2,0,0,tu.muzzles);
+    });
+  }
+
+  // Lança-Chamas TX-7: hazard-striped tripod, fuel tanks on the back, banded nozzle with pilot light
+  function buildFlame(root, turret, level, tu){
+    var grey=M("grey"), greyL=M("greyLight"), steel=M("steel"), black=M("black"), orange=M("orange");
+    foundation(root,15);
+    part(gCyl(3,3.6,10,10), steel, 0,6,0, root);
+    [0.5, 0.5+2.094, 0.5+4.189].forEach(function(a){
+      var fx=Math.cos(a)*14, fz=Math.sin(a)*14;
+      strut(root,[Math.cos(a)*2.5,10,Math.sin(a)*2.5],[fx,2.4,fz],2.4,grey);
+      part(gBox(6,2,6), orange, fx,2.6,fz, root);
+      part(gBox(6.2,0.6,6.2), black, fx,3.1,fz, root);
+    });
+    turret.position.y=13;
+    part(gCyl(4.5,4.5,2,12), black, 0,0.5,0, turret);
+    part(gBox(14,9,12), grey, -2,5.5,0, turret);
+    part(gBox(14.2,1.8,12.2), orange, -2,7,0, turret);
+    part(gBox(14.3,0.8,12.3), black, -2,5.5,0, turret);
+    var tankZs=level>=2 ? [-4.4,0,4.4] : [-3.6,3.6];
+    tankZs.forEach(function(z){
+      rodX(turret,3.1,12,-9,13,z,greyL,12);
+      var cap=part(gCyl(3.2,3.2,1,12), orange, 3.5,13,z, turret); cap.rotation.z=-Math.PI/2;
+    });
+    var zs=level>=3 ? [-3,3] : [0];
+    zs.forEach(function(z){
+      var g=new THREE.Group(); g.position.set(5,5.5,z); turret.add(g);
+      rodX(g,2,15,0,0,0,steel);
+      [3,7,11].forEach(function(x){ var b=part(gCyl(2.5,2.5,1.4,10), orange, x,0,0, g); b.rotation.z=-Math.PI/2; });
+      var tip=part(gCone(2.7,4.5,10), black, 17,0,0, g); tip.rotation.z=-Math.PI/2;
+      part(gSphere(0.8,8,6), smat(0xb070ff,{emissive:0x9a5bff, emissiveIntensity:2}), 19.6,0,0, g);
+      tu.recoil.push({obj:g, base:g.position.x, k:0.5});
+      marker(turret,24.5,5.5,z,tu.muzzles);
+    });
+  }
+
+  // Bateria Y-Rex: four-legged launcher, elevated missile pod (2x2 tubes, 3x2 at Mk3), tracking dish from Mk2
+  function buildRocket(root, turret, level, tu){
+    var white=M("white"), greyL=M("greyLight"), steel=M("steel"), black=M("black"), red=M("red");
+    foundation(root,16);
+    [[1,1],[1,-1],[-1,1],[-1,-1]].forEach(function(o){
+      strut(root,[o[0]*5,9,o[1]*5],[o[0]*14,2.4,o[1]*14],2.6,steel);
+      part(gBox(5,1.6,5), black, o[0]*14,2.2,o[1]*14, root);
+    });
+    part(gBox(16,8,16), greyL, 0,11,0, root);
+    part(gBox(16.2,1.4,16.2), red, 0,13,0, root);
+    turret.position.y=15.5;
+    part(gCyl(6,6,2,12), black, 0,0.5,0, turret);
+    var rows=level>=3 ? 3 : 2;
+    var podH=rows*6.4+2;
+    var pod=new THREE.Group(); pod.position.set(0,podH/2+1,0); pod.rotation.z=0.24; turret.add(pod);
+    part(gBox(14,podH,15), white, 0,0,0, pod);
+    part(gBox(14.2,1.2,15.2), red, 0,podH/2-1.5,0, pod);
+    for(var r=0;r<rows;r++) for(var c=0;c<2;c++){
+      var y=(r-(rows-1)/2)*6.4, z=(c-0.5)*6.8;
+      var tube=part(gCyl(2.6,2.6,2,12), black, 7.4,y,z, pod); tube.rotation.z=-Math.PI/2;
+      var nose=part(gCone(1.9,3.4,10), white, 8.6,y,z, pod); nose.rotation.z=-Math.PI/2;
+      marker(pod,10,y,z,tu.muzzles);
+    }
+    tu.recoil.push({obj:pod, base:pod.position.x, k:0.35});
+    if(level>=2){
+      var dish=new THREE.Group(); dish.position.set(-5,23+(rows-2)*6.4,0); root.add(dish);
+      part(gCyl(0.6,0.6,4,6), steel, 0,-1,0, dish);
+      var tilt=new THREE.Group(); tilt.rotation.z=0.9; tilt.position.y=1.5; dish.add(tilt);
+      var bowl=part(gSphere(4.5,12,6,Math.PI*0.32), smat(PAL.greyLight,{side:THREE.DoubleSide}), 0,4.5,0, tilt);
+      bowl.rotation.x=Math.PI;
+      root.userData.dish=dish;
+    }
+  }
+
+  // Strike Orbital: uplink command post — glowing red core, rotating dish, laser designator arm that tracks the target
+  function buildOrbital(root, turret, level, tu){
+    var white=M("white"), black=M("black"), steel=M("steel");
+    foundation(root,19);
+    part(gCyl(17,18.5,5,6), black, 0,4,0, root);
+    part(gCyl(17.6,17.6,1.2,6), white, 0,7,0, root);
+    part(gCyl(7.5,8.5,8,12), white, 0,11,0, root);
+    var coreMat=new THREE.MeshStandardMaterial({color:0x5a0b08, emissive:0xff2a14, emissiveIntensity:1.2, roughness:0.4});
+    var core=part(gCyl(5,5,9,14), coreMat, 0,19.5,0, root);
+    for(var i=0;i<8;i++){ var a=i/8*Math.PI*2; part(gBox(0.9,9.4,0.9), black, Math.cos(a)*5.5,19.5,Math.sin(a)*5.5, root); }
+    part(gCyl(7,7.5,6,12), white, 0,27,0, root);
+    part(gCyl(4,5,2,12), black, 0,31,0, root);
+    var dish=new THREE.Group(); dish.position.set(0,32,0); root.add(dish);
+    part(gCyl(0.8,0.8,4,6), steel, 0,2,0, dish);
+    var tilt=new THREE.Group(); tilt.position.y=3.5; tilt.rotation.z=0.55; dish.add(tilt);
+    var bowlR=level>=2 ? 10 : 8.5;
+    var bowl=part(gSphere(bowlR,18,8,Math.PI*0.32), smat(PAL.white,{side:THREE.DoubleSide}), 0,bowlR,0, tilt);
+    bowl.rotation.x=Math.PI;
+    part(gCyl(0.3,0.3,bowlR*0.8,4), steel, 0,bowlR*0.4,0, tilt);
+    root.userData.dish=dish;
+    root.userData.core=core;
+    root.userData.coreBase=level>=3 ? 1.8 : level===2 ? 1.4 : 1.1;
+    turret.position.y=23;
+    part(gBox(10,3.5,4), black, 9,0,0, turret);
+    rodX(turret,1.5,6,13,0,0,steel);
+    part(gSphere(1.2,10,8), smat(0xff3b30,{emissive:0xff2010, emissiveIntensity:2}), 19.3,0,0, turret);
+    marker(turret,20,0,0,tu.muzzles);
+  }
+
+  var TOWER_BUILDERS={gunner:buildGunner, heavy:buildHeavy, flame:buildFlame, rocket:buildRocket, orbital:buildOrbital};
+  var TURRET_TURN_RATE=10;
+  function buildTowerMesh(typeId, level){
+    level=level||1;
+    var root=new THREE.Group(), turret=new THREE.Group();
+    root.add(turret);
+    var tu={muzzles:[], recoil:[], spinners:[]};
+    TOWER_BUILDERS[typeId](root, turret, level, tu);
+    turret.userData=tu;
+    root.userData.turret=turret;
+    return root;
+  }
+
+  var _mw=new THREE.Vector3();
+  function muzzleWorld(tower, idx){
+    var mesh=towerMeshes.get(tower);
+    if(!mesh) return null;
+    var list=mesh.userData.turret.userData.muzzles;
+    if(!list || !list.length) return null;
+    mesh.updateMatrixWorld(true);
+    list[(idx||0)%list.length].getWorldPosition(_mw);
+    return {x:_mw.x, y:_mw.y, z:_mw.z};
+  }
+
+  // ---------------- weapon FX: muzzle flashes, ammunition, fire, smoke, explosions ----------------
+  function radialTexture(stops){
     var c=document.createElement("canvas"); c.width=c.height=64;
     var g=c.getContext("2d");
     var gr=g.createRadialGradient(32,32,0,32,32,32);
-    gr.addColorStop(0,"rgba(255,255,255,1)");
-    gr.addColorStop(0.25,"rgba(255,230,160,0.9)");
-    gr.addColorStop(0.6,"rgba(255,140,40,0.35)");
-    gr.addColorStop(1,"rgba(255,120,20,0)");
+    stops.forEach(function(s){ gr.addColorStop(s[0],s[1]); });
     g.fillStyle=gr; g.fillRect(0,0,64,64);
     return new THREE.CanvasTexture(c);
-  })();
+  }
+  var fireTex=radialTexture([[0,"rgba(255,255,255,1)"],[0.25,"rgba(255,235,170,0.95)"],[0.6,"rgba(255,150,50,0.4)"],[1,"rgba(255,120,20,0)"]]);
+  var smokeTex=radialTexture([[0,"rgba(255,255,255,0.9)"],[0.5,"rgba(255,255,255,0.45)"],[1,"rgba(255,255,255,0)"]]);
 
-  var TOWER_SPRITE_HEIGHT={gunner:42, heavy:38, flame:36, rocket:42, orbital:46};
-  function spriteKeyFor(typeId, level, firing){
-    if(typeId==="gunner"){
-      if(level>=3) return firing ? "mi9_l3_firing" : "mi9_l3";
-      if(level===2) return "mi9_l2";
-      return "mi9_l1";
+  var fxList=[];
+  function addFx(obj, life, update){ scene.add(obj); fxList.push({obj:obj, life:life, max:life, update:update}); }
+  function clearFx(){ fxList.forEach(function(f){ scene.remove(f.obj); disposeMesh(f.obj); }); fxList.length=0; }
+  function updateFx(dt){
+    if(dt<=0) return;
+    for(var i=fxList.length-1;i>=0;i--){
+      var f=fxList[i];
+      f.life-=dt;
+      if(f.life<=0){ scene.remove(f.obj); disposeMesh(f.obj); fxList.splice(i,1); continue; }
+      f.update(f.obj, 1-f.life/f.max, dt);
     }
-    if(typeId==="heavy") return "morita";
-    if(typeId==="flame") return "tx7";
-    if(typeId==="rocket") return "yrex";
-    if(typeId==="orbital") return "orbital";
-    return null;
+  }
+  function fxSprite(tex, color, additive, opacity){
+    return new THREE.Sprite(new THREE.SpriteMaterial({
+      map:tex, color:color, transparent:true, opacity:opacity, depthWrite:false,
+      blending:additive?THREE.AdditiveBlending:THREE.NormalBlending
+    }));
+  }
+  var _c1=new THREE.Color(), FIRE_HOT=new THREE.Color(0xffe39a), FIRE_MID=new THREE.Color(0xff7a1e), FIRE_COOL=new THREE.Color(0x6a1c08);
+  function fireColor(p, out){
+    if(p<0.45) out.copy(FIRE_HOT).lerp(FIRE_MID,p/0.45); else out.copy(FIRE_MID).lerp(FIRE_COOL,(p-0.45)/0.55);
+    return out;
+  }
+  function spawnSmoke(x,y,z,size,life,opts){
+    opts=opts||{};
+    var a0=opts.opacity||0.5, vx=opts.vx||0, vz=opts.vz||0, rise=opts.rise===undefined?10:opts.rise;
+    var s=fxSprite(smokeTex, opts.color||0x8f8b80, false, a0);
+    s.position.set(x,y,z); s.scale.set(size,size,1);
+    addFx(s,life,function(o,p,dt){
+      var k=1+p*1.8; o.scale.set(size*k,size*k,1);
+      o.material.opacity=a0*(1-p);
+      o.position.x+=vx*dt; o.position.z+=vz*dt; o.position.y+=rise*dt;
+    });
+  }
+  function spawnFire(x,y,z,vx,vy,vz,size,life){
+    var s=fxSprite(fireTex,0xffffff,true,1);
+    s.position.set(x,y,z); s.scale.set(size,size,1);
+    addFx(s,life,function(o,p,dt){
+      var drag=Math.pow(0.12,dt);
+      vx*=drag; vz*=drag; vy=vy*drag+22*dt;
+      o.position.x+=vx*dt; o.position.y+=vy*dt; o.position.z+=vz*dt;
+      var k=1+p*2.4; o.scale.set(size*k,size*k,1);
+      o.material.color.copy(fireColor(p,_c1));
+      o.material.opacity=1-p*p;
+    });
+  }
+  function spawnMuzzleFlash(pos, size, color, life){
+    var s=fxSprite(fireTex,color,true,1);
+    s.position.set(pos.x,pos.y,pos.z); s.scale.set(size,size,1);
+    addFx(s,life,function(o,p){ var k=size*(1-p*0.4); o.scale.set(k,k,1); o.material.opacity=1-p; });
+  }
+  function spawnSparks(x,y,z,n,color,speed){
+    for(var i=0;i<n;i++) (function(){
+      var a=Math.random()*Math.PI*2, sp=speed*(0.5+Math.random()*0.7);
+      var vx=Math.cos(a)*sp, vz=Math.sin(a)*sp, vy=(0.3+Math.random()*0.8)*sp;
+      var sz=1.6+Math.random()*1.6;
+      var s=fxSprite(fireTex,color,true,1);
+      s.position.set(x,y,z); s.scale.set(sz,sz,1);
+      addFx(s,0.18+Math.random()*0.2,function(o,p,dt){
+        vy-=260*dt;
+        o.position.x+=vx*dt; o.position.z+=vz*dt;
+        o.position.y=Math.max(0.5,o.position.y+vy*dt);
+        o.material.opacity=1-p;
+      });
+    })();
+  }
+  function spawnExplosion(x,y,z,size){
+    var s=fxSprite(fireTex,0xffffff,true,1);
+    s.position.set(x,y,z);
+    addFx(s,0.38,function(o,p){
+      var k=size*(0.35+p*1.1); o.scale.set(k,k,1);
+      o.material.color.copy(fireColor(p,_c1));
+      o.material.opacity=1-p;
+    });
+    for(var i=0;i<5;i++){
+      var a=Math.random()*Math.PI*2, r=Math.random()*size*0.2;
+      spawnSmoke(x+Math.cos(a)*r, y+2, z+Math.sin(a)*r, size*0.45, 0.9+Math.random()*0.5,
+        {color:0x4a463e, opacity:0.55, rise:14, vx:Math.cos(a)*8, vz:Math.sin(a)*8});
+    }
+    spawnSparks(x,y,z,7,0xffc070,120);
+    var sc=new THREE.Mesh(sgeo("scorch",function(){ return new THREE.CircleGeometry(1,16); }),
+      new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:0.4, depthWrite:false}));
+    sc.rotation.x=-Math.PI/2; sc.position.set(x,0.45,z); sc.scale.setScalar(size*0.35);
+    addFx(sc,2.5,function(o,p){ o.material.opacity=0.4*(1-p); });
+  }
+  var _up=new THREE.Vector3(0,1,0), _dir=new THREE.Vector3();
+  function spawnBeam(ax,ay,az,bx,by,bz,color,width,life){
+    var m=new THREE.Mesh(sgeo("beam",function(){ return new THREE.CylinderGeometry(1,1,1,8,1,true); }),
+      new THREE.MeshBasicMaterial({color:color, transparent:true, opacity:1, blending:THREE.AdditiveBlending, depthWrite:false}));
+    var dx=bx-ax, dy=by-ay, dz=bz-az, len=Math.sqrt(dx*dx+dy*dy+dz*dz);
+    m.position.set((ax+bx)/2,(ay+by)/2,(az+bz)/2);
+    m.quaternion.setFromUnitVectors(_up, _dir.set(dx/len,dy/len,dz/len));
+    m.scale.set(width,len,width);
+    addFx(m,life,function(o,p){ o.material.opacity=1-p; var w=width*(1-p*0.6); o.scale.x=w; o.scale.z=w; });
+  }
+  function spawnImpact(kind, target){
+    var x=target.x, z=target.y, y=ENEMIES[target.type].radius*0.5;
+    if(kind==="bullet") spawnSparks(x,y,z,4,0xffd27a,90);
+    else if(kind==="shell") spawnExplosion(x,y,z,34);
+    else spawnExplosion(x,y,z,46);
   }
 
-  function buildTowerMesh(typeId, level){
-    level=level||1;
-    var spriteKey=spriteKeyFor(typeId, level, false);
-    var tex=spriteKey && spriteTextures[spriteKey];
-    if(tex){
-      var sGroup=new THREE.Group();
-      var info=SPRITE_FILES[spriteKey];
-      var height=TOWER_SPRITE_HEIGHT[typeId]||42;
-      var width=height*(info.w/info.h);
-      var sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:tex, transparent:true}));
-      sprite.scale.set(width,height,1);
-      sprite.position.y=height/2;
-      sGroup.add(sprite);
-      var shadowBlob=new THREE.Mesh(
-        new THREE.CircleGeometry(width*0.32,16),
-        new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:0.32, depthWrite:false})
-      );
-      shadowBlob.rotation.x=-Math.PI/2;
-      shadowBlob.position.y=0.4;
-      sGroup.add(shadowBlob);
-      var flash=new THREE.Sprite(new THREE.SpriteMaterial({
-        map:glowTexture, color:(FLASH_CFG[typeId]||FLASH_CFG.gunner).color,
-        transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, opacity:0
+  // ammunition meshes point along +z so lookAt() aims them along their flight path
+  var PROJ_MAT={};
+  function projMat(key, make){ if(!PROJ_MAT[key]){ PROJ_MAT[key]=make(); PROJ_MAT[key].userData.shared=true; } return PROJ_MAT[key]; }
+  function makeProjectileMesh(kind){
+    var g=new THREE.Group();
+    if(kind==="bullet"){
+      g.add(new THREE.Mesh(gBox(0.9,0.9,13), projMat("tracer",function(){ return new THREE.MeshBasicMaterial({color:0xffd978}); })));
+      var glow=new THREE.Sprite(projMat("tracerGlow",function(){
+        return new THREE.SpriteMaterial({map:fireTex, color:0xffc060, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, opacity:0.7});
       }));
-      flash.visible=false;
-      sGroup.add(flash);
-      sGroup.userData.isSprite=true;
-      sGroup.userData.sprite=sprite;
-      sGroup.userData.flash=flash;
-      sGroup.userData.w=width;
-      sGroup.userData.h=height;
-      sGroup.userData.spriteKey=spriteKey;
-      return sGroup;
+      glow.scale.set(5,5,1); glow.position.z=5; g.add(glow);
+    } else if(kind==="shell"){
+      var brass=smat(PAL.brass,{metalness:0.7, roughness:0.35});
+      var body=new THREE.Mesh(gCyl(1.7,1.7,6,10), smat(0x3a3a30,{metalness:0.6, roughness:0.4})); body.rotation.x=Math.PI/2; g.add(body);
+      var band=new THREE.Mesh(gCyl(1.8,1.8,1,10), brass); band.rotation.x=Math.PI/2; band.position.z=-1.5; g.add(band);
+      var nose=new THREE.Mesh(gCone(1.7,3.5,10), brass); nose.rotation.x=Math.PI/2; nose.position.z=4.7; g.add(nose);
+    } else {
+      var rb=new THREE.Mesh(gCyl(1.5,1.5,10,10), M("white")); rb.rotation.x=Math.PI/2; g.add(rb);
+      var rn=new THREE.Mesh(gCone(1.5,3.6,10), M("red")); rn.rotation.x=Math.PI/2; rn.position.z=6.8; g.add(rn);
+      for(var i=0;i<4;i++){
+        var a=i*Math.PI/2, fin=new THREE.Mesh(gBox(3.4,0.4,3), M("red"));
+        fin.position.set(Math.cos(a)*1.9,Math.sin(a)*1.9,-4); fin.rotation.z=a; g.add(fin);
+      }
+      var fl=new THREE.Sprite(projMat("rocketFlame",function(){
+        return new THREE.SpriteMaterial({map:fireTex, color:0xffa040, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false});
+      }));
+      fl.scale.set(8,8,1); fl.position.z=-7; g.add(fl);
     }
+    g.traverse(function(o){ if(o.isMesh) o.castShadow=true; });
+    return g;
+  }
+  function removeProjectileMesh(pr){ if(pr.mesh){ scene.remove(pr.mesh); pr.mesh=null; } }
 
-    var def=TOWERS[typeId];
-    var colorHex=parseInt(def.color.slice(1),16);
-    var group=new THREE.Group();
-
-    var base=new THREE.Mesh(
-      new THREE.CylinderGeometry(15,17,10,12),
-      new THREE.MeshStandardMaterial({color:0x14150f, roughness:0.75})
-    );
-    base.position.y=5;
-    base.castShadow=true; base.receiveShadow=true;
-    group.add(base);
-
-    var turret=new THREE.Group();
-    turret.position.y=10;
-    group.add(turret);
-
-    var mat=new THREE.MeshStandardMaterial({color:colorHex, roughness:0.5, metalness:0.2});
-    var darkMat=new THREE.MeshStandardMaterial({color:0x1a1a12, roughness:0.6});
-
-    if(typeId==="gunner"){
-      var recv=new THREE.Mesh(new THREE.SphereGeometry(7,12,10), mat);
-      recv.castShadow=true;
-      turret.add(recv);
-      [-4,4].forEach(function(oz){
-        var barrel=new THREE.Mesh(new THREE.CylinderGeometry(1.6,1.6,20,8), mat);
-        barrel.rotation.z=Math.PI/2;
-        barrel.position.set(12,oz,0);
-        barrel.castShadow=true;
-        turret.add(barrel);
-      });
-    } else if(typeId==="heavy"){
-      var hull=new THREE.Mesh(new THREE.BoxGeometry(15,14,18), mat);
-      hull.position.y=3;
-      hull.castShadow=true;
-      turret.add(hull);
-      var barrel=new THREE.Mesh(new THREE.CylinderGeometry(3,3.4,20,10), darkMat);
-      barrel.rotation.z=Math.PI/2;
-      barrel.position.set(14,3,0);
-      barrel.name="barrel";
-      barrel.castShadow=true;
-      turret.add(barrel);
-    } else if(typeId==="flame"){
-      var tank=new THREE.Mesh(new THREE.CylinderGeometry(6,6,16,10), new THREE.MeshStandardMaterial({color:0x5a5346,roughness:0.85}));
-      tank.rotation.z=Math.PI/2;
-      tank.position.set(-9,2,0);
-      tank.castShadow=true;
-      turret.add(tank);
-      var nozzle=new THREE.Mesh(new THREE.ConeGeometry(6,18,10), mat);
-      nozzle.rotation.z=-Math.PI/2;
-      nozzle.position.set(11,2,0);
-      nozzle.castShadow=true;
-      turret.add(nozzle);
-    } else if(typeId==="rocket"){
-      [-5,5].forEach(function(oz){
-        var tube=new THREE.Mesh(new THREE.CylinderGeometry(3.2,3.2,20,10), mat);
-        tube.rotation.z=Math.PI/2;
-        tube.position.set(11,oz,0);
-        tube.castShadow=true;
-        turret.add(tube);
-      });
-    } else if(typeId==="orbital"){
-      var ring=new THREE.Mesh(new THREE.TorusGeometry(12,2,8,20), mat);
-      ring.rotation.x=Math.PI/2;
-      ring.name="ring";
-      ring.castShadow=true;
-      turret.add(ring);
-      var beacon=new THREE.Mesh(
-        new THREE.SphereGeometry(4,10,10),
-        new THREE.MeshStandardMaterial({color:0xfff6cf, emissive:0xffcf5c, emissiveIntensity:0.7})
-      );
-      turret.add(beacon);
-    }
-
-    group.userData.turret=turret;
-    return group;
+  var _look=new THREE.Vector3();
+  function findEnemy(id){ for(var k=0;k<enemies.length;k++) if(enemies[k].id===id) return enemies[k]; return null; }
+  // Projectiles still fly on the 2D gameplay plane; this lifts them into 3D (muzzle height -> target, with an arc
+  // for shells/missiles) and blends the start from the barrel tip toward the logical path.
+  function syncProjectiles(gdt){
+    projectiles.forEach(function(pr){
+      var tg=findEnemy(pr.targetId);
+      var dd=tg ? Math.hypot(tg.x-pr.x,tg.y-pr.y) : 0;
+      var p=Math.max(0,Math.min(1,1-dd/pr.startDist));
+      var th=tg ? ENEMIES[tg.type].radius*0.5 : 4;
+      var h=pr.h0+(th-pr.h0)*p;
+      if(pr.kind==="shell") h+=Math.sin(p*Math.PI)*Math.min(38,pr.startDist*0.2);
+      else if(pr.kind==="rocket") h+=Math.sin(p*Math.PI)*Math.min(20,pr.startDist*0.1);
+      var x=pr.x+pr.ox*(1-p), z=pr.y+pr.oz*(1-p);
+      if(!pr.mesh){
+        pr.mesh=makeProjectileMesh(pr.kind);
+        pr.mesh.position.set(x,h,z);
+        scene.add(pr.mesh);
+        if(tg){ _look.set(tg.x,th,tg.y); pr.mesh.lookAt(_look); }
+        pr.lp=new THREE.Vector3(x,h,z);
+        return;
+      }
+      var dx=x-pr.lp.x, dy=h-pr.lp.y, dz=z-pr.lp.z;
+      pr.mesh.position.set(x,h,z);
+      if(dx*dx+dy*dy+dz*dz>1e-4){ _look.set(x+dx,h+dy,z+dz); pr.mesh.lookAt(_look); }
+      pr.lp.set(x,h,z);
+      if(pr.kind!=="bullet" && gdt>0){
+        pr.trailT=(pr.trailT||0)-gdt;
+        if(pr.trailT<=0){
+          if(pr.kind==="rocket"){ pr.trailT=0.02; spawnSmoke(x-dx,h-dy,z-dz,4,0.7,{color:0xc9c6bd, opacity:0.45, rise:6}); }
+          else { pr.trailT=0.045; spawnSmoke(x-dx,h-dy,z-dz,3,0.5,{color:0x77736a, opacity:0.35, rise:4}); }
+        }
+      }
+    });
   }
 
   function buildEnemyMesh(typeId){
@@ -1183,52 +1475,36 @@
   var towerMeshes=new Map();
   var enemyMeshes=new Map();
 
-  function syncMeshes(now){
+  function syncMeshes(now, gdt){
+    gdt=gdt||0;
     if(baseMesh && baseMesh.userData.beacon) baseMesh.userData.beacon.rotation.y=now*0.0009;
     towers.forEach(function(t){
       var mesh=towerMeshes.get(t);
       if(!mesh) return;
-      if(mesh.userData.isSprite){
-        var ud=mesh.userData, sp=ud.sprite, fl=ud.flash;
-        var ang=t.angle||0, ca=Math.cos(ang), sa=Math.sin(ang);
-        var firingLeft=t.firingUntil ? t.firingUntil-now : 0;
-        var firing=firingLeft>0;
-        if(t.typeId==="orbital"){
-          var pulse=firing ? 1+0.08*(firingLeft/(t.fireDur||450)) : 1+0.015*Math.sin(now*0.003+t.col);
-          sp.scale.set(ud.w*pulse, ud.h*pulse, 1);
-          sp.position.y=ud.h*pulse/2;
-        } else {
-          var key=spriteKeyFor(t.typeId, t.level, firing);
-          var a=worldToScreen(t.x,0,t.y), b=worldToScreen(t.x+ca*20,0,t.y+sa*20);
-          var flip=((b.x-a.x)<0)!==ART_FACES_LEFT[key];
-          var tex=(flip?spriteTexturesFlipped:spriteTextures)[key];
-          if(tex && sp.material.map!==tex){ sp.material.map=tex; sp.material.needsUpdate=true; ud.spriteKey=key; }
-          var kick=(t.recoil||0)*1.2;
-          if(t.typeId==="flame" && firing) kick=(Math.random()-0.5)*1.8;
-          sp.position.x=-ca*kick;
-          sp.position.z=-sa*kick;
-        }
-        if(firing){
-          var k=Math.max(0, firingLeft/(t.fireDur||180));
-          var size=(FLASH_CFG[t.typeId]||FLASH_CFG.gunner).size*(0.7+0.3*k);
-          if(t.typeId==="flame") size*=0.8+Math.random()*0.4;
-          fl.visible=true;
-          fl.material.opacity=k;
-          fl.scale.set(size,size,1);
-          if(t.typeId==="orbital") fl.position.set(0, ud.h*0.85, 0);
-          else fl.position.set(ca*ud.w*0.45, ud.h*0.55, sa*ud.w*0.45);
-        } else {
-          fl.visible=false;
-        }
-        return;
+      var ud=mesh.userData, turret=ud.turret, tu=turret.userData;
+      // turret turns toward the aim angle at a finite rate instead of snapping
+      var aim=t.angle||0;
+      if(t.visAngle===undefined) t.visAngle=aim;
+      var diff=Math.atan2(Math.sin(aim-t.visAngle), Math.cos(aim-t.visAngle));
+      var maxStep=TURRET_TURN_RATE*gdt;
+      t.visAngle+=Math.max(-maxStep, Math.min(maxStep, diff));
+      turret.rotation.y=-t.visAngle;
+      var rc=t.recoil||0;
+      tu.recoil.forEach(function(r){ r.obj.position.x=r.base-rc*r.k; });
+      if(tu.spinners.length){
+        var spinning=t.firingUntil && now<t.firingUntil+300;
+        tu.spin=(tu.spin||0)+gdt*(spinning?30:1.5);
+        tu.spinners.forEach(function(g){ g.rotation.x=tu.spin; });
       }
-      var turret=mesh.userData.turret;
-      if(t.typeId==="orbital"){
-        turret.rotation.y=now*0.0014;
-      } else {
-        turret.rotation.y=-(t.angle||0);
-        var barrel=turret.getObjectByName("barrel");
-        if(barrel) barrel.position.x=14-(t.recoil||0);
+      if(ud.drone){
+        var da=now*0.0011+t.col;
+        ud.drone.position.set(Math.cos(da)*7, 30+Math.sin(now*0.0035)*1.2, Math.sin(da)*7);
+        ud.drone.rotation.y=-da;
+      }
+      if(ud.dish) ud.dish.rotation.y=now*0.0006;
+      if(ud.core){
+        var hot=t.firingUntil && now<t.firingUntil;
+        ud.core.material.emissiveIntensity = hot ? 3.4 : ud.coreBase+0.35*Math.sin(now*0.004+t.col);
       }
     });
     enemies.forEach(function(e){
@@ -1401,6 +1677,10 @@
     mesh.position.set(tower.x,0,tower.y);
     scene.add(mesh);
     towerMeshes.set(tower,mesh);
+    for(var di=0;di<6;di++){
+      var da=di/6*Math.PI*2;
+      spawnSmoke(tower.x+Math.cos(da)*14,3,tower.y+Math.sin(da)*14,12,0.7,{color:0x8a8576, opacity:0.4, rise:6, vx:Math.cos(da)*14, vz:Math.sin(da)*14});
+    }
 
     addLog(TOWERS[typeId].name+" instalado no setor "+col+","+row+".","");
     refreshArmory();
@@ -1424,16 +1704,13 @@
     tower.invested+=cost;
     tower.level++;
     var oldMesh=towerMeshes.get(tower);
-    if(oldMesh && oldMesh.userData.isSprite){
-      var newKey=spriteKeyFor(tower.typeId, tower.level, false);
-      if(newKey!==oldMesh.userData.spriteKey){
-        scene.remove(oldMesh); disposeMesh(oldMesh);
-        var newMesh=buildTowerMesh(tower.typeId, tower.level);
-        newMesh.position.set(tower.x,0,tower.y);
-        scene.add(newMesh);
-        towerMeshes.set(tower,newMesh);
-      }
-    }
+    if(oldMesh){ scene.remove(oldMesh); disposeMesh(oldMesh); }
+    var newMesh=buildTowerMesh(tower.typeId, tower.level);
+    newMesh.position.set(tower.x,0,tower.y);
+    scene.add(newMesh);
+    towerMeshes.set(tower,newMesh);
+    spawnSparks(tower.x,14,tower.y,12,0xffe08a,90);
+    spawnSmoke(tower.x,4,tower.y,20,0.8,{color:0x8a8576, opacity:0.35, rise:10});
     addLog(TOWERS[tower.typeId].name+" ampliado para nível "+tower.level+".","info");
     renderSelectedPanel();
     refreshArmory();
@@ -1500,16 +1777,25 @@
       inRange.sort(function(a,b){ return b.e.hp-a.e.hp; });
       var capped=inRange.slice(0,4);
       capped.forEach(function(o){ applyDamage(o.e,dps*dt,"flame"); });
-      tower.flameTimer-=dtMs;
       if(capped.length>0){
         tower.fireDur=120; tower.firingUntil=performance.now()+120;
         tower.angle=Math.atan2(capped[0].e.y-tower.y,capped[0].e.x-tower.x);
-        if(tower.flameTimer<=0){
-          tower.flameTimer=90;
-          var ang=tower.angle;
-          particles.push({x:tower.x+Math.cos(ang)*14,y:tower.y+Math.sin(ang)*14,
-            vx:Math.cos(ang)*70+(Math.random()-0.5)*40, vy:Math.sin(ang)*70+(Math.random()-0.5)*40,
-            life:0.32,maxLife:0.32,color:"#f4923a",size:5});
+        tower.flameFxT=(tower.flameFxT||0)-dt;
+        if(tower.flameFxT<=0){
+          tower.flameFxT=0.028;
+          tower.flameIdx=(tower.flameIdx||0)+1;
+          var fm=muzzleWorld(tower, tower.flameIdx);
+          if(fm){
+            var va=tower.visAngle===undefined ? tower.angle : tower.visAngle;
+            // drag makes a particle travel ~0.32x its launch speed, so launch at ~3x range to reach it
+            for(var fi=0;fi<2;fi++){
+              var spread=(Math.random()-0.5)*0.32, sp=range*3*(0.8+Math.random()*0.3);
+              spawnFire(fm.x,fm.y,fm.z, Math.cos(va+spread)*sp, 4+Math.random()*10, Math.sin(va+spread)*sp, 4+Math.random()*2, 0.5+Math.random()*0.15);
+            }
+            if(Math.random()<0.25){
+              spawnSmoke(fm.x+Math.cos(va)*range*0.8, fm.y+6, fm.z+Math.sin(va)*range*0.8, 9, 0.9, {color:0x3f3a33, opacity:0.35, rise:16});
+            }
+          }
         }
       }
       return;
@@ -1524,7 +1810,11 @@
     if(tower.typeId==="orbital"){
       tower.fireDur=450; tower.firingUntil=performance.now()+450;
       spawnFlash(target.x,target.y,"#f4d35e");
-      particles.push({x:target.x,y:target.y-CH,vx:0,vy:900,life:CH/900,maxLife:CH/900,color:"#fff6cf",size:3,beamTo:target.y});
+      var om=muzzleWorld(tower,0), oty=ENEMIES[target.type].radius*0.5;
+      if(om) spawnBeam(om.x,om.y,om.z, target.x,oty,target.y, 0xff3020, 0.9, 0.35);
+      spawnBeam(target.x,620,target.y, target.x,0,target.y, 0xfff0c0, 7, 0.4);
+      spawnBeam(target.x,620,target.y, target.x,0,target.y, 0xffffff, 2.2, 0.25);
+      spawnExplosion(target.x,4,target.y,90);
       var dmg=towerStat(tower,"damage");
       for(var j=0;j<enemies.length;j++){
         var e2=enemies[j];
@@ -1540,10 +1830,25 @@
     tower.fireDur = tower.typeId==="gunner" ? 220 : 180;
     tower.firingUntil=performance.now()+tower.fireDur;
     var speed = def.kind==="bullet"?420 : def.kind==="shell"?300:220;
+    tower.barrelIdx=(tower.barrelIdx||0)+1;
+    var mw=muzzleWorld(tower, tower.barrelIdx);
     projectiles.push({
       x:tower.x,y:tower.y,targetId:target.id,speed:speed,
-      damage:towerStat(tower,"damage"),splash:def.splash||0,kind:def.kind,color:def.color
+      damage:towerStat(tower,"damage"),splash:def.splash||0,kind:def.kind,color:def.color,
+      startDist:Math.max(1,Math.hypot(target.x-tower.x,target.y-tower.y)),
+      ox:mw?mw.x-tower.x:0, oz:mw?mw.z-tower.y:0, h0:mw?mw.y:12
     });
+    if(mw){
+      if(def.kind==="bullet"){
+        spawnMuzzleFlash(mw,7,0xffe6a0,0.06);
+      } else if(def.kind==="shell"){
+        spawnMuzzleFlash(mw,18,0xffc070,0.1);
+        spawnSmoke(mw.x,mw.y,mw.z,8,0.9,{color:0x8a857a, opacity:0.5, rise:8});
+      } else {
+        spawnMuzzleFlash(mw,11,0xff9a50,0.09);
+        spawnSmoke(mw.x,mw.y,mw.z,6,0.8,{color:0xbdb9ae, opacity:0.45, rise:6});
+      }
+    }
   }
 
   // ---------------- update ----------------
@@ -1594,7 +1899,7 @@
       var pr=projectiles[p];
       var target=null;
       for(var k=0;k<enemies.length;k++){ if(enemies[k].id===pr.targetId){target=enemies[k]; break;} }
-      if(!target){ projectiles.splice(p,1); continue; }
+      if(!target){ removeProjectileMesh(pr); projectiles.splice(p,1); continue; }
       var ddx=target.x-pr.x, ddy=target.y-pr.y, dd=Math.hypot(ddx,ddy);
       var mv=pr.speed*dt;
       if(mv>=dd || dd<6){
@@ -1608,7 +1913,8 @@
         } else {
           applyDamage(target,pr.damage,pr.kind);
         }
-        spawnBurst(target.x,target.y,pr.color,pr.splash>0?10:4);
+        spawnImpact(pr.kind,target);
+        removeProjectileMesh(pr);
         projectiles.splice(p,1);
       } else {
         pr.x+=ddx/dd*mv; pr.y+=ddy/dd*mv;
@@ -1650,6 +1956,8 @@
     towerMeshes.clear();
     enemyMeshes.forEach(function(mesh){ scene.remove(mesh); disposeMesh(mesh); });
     enemyMeshes.clear();
+    projectiles.forEach(removeProjectileMesh);
+    clearFx();
     towers=[]; towerGrid.clear(); enemies=[]; projectiles=[]; particles=[];
     logEntries=[]; elLog.innerHTML="";
     state.money=150; state.lives=20; state.wave=0; state.killCount=0;
@@ -2093,23 +2401,10 @@
     towers.forEach(drawTowerOverlay);
     enemies.forEach(drawEnemyOverlay);
 
-    projectiles.forEach(function(pr){
-      var p=worldToScreen(pr.x,6,pr.y);
-      ctx.fillStyle=pr.color;
-      ctx.beginPath();
-      ctx.arc(p.x,p.y, pr.kind==="bullet"?2.5:pr.kind==="shell"?4:5.5,0,Math.PI*2);
-      ctx.fill();
-    });
-
     particles.forEach(function(pt){
       var a=Math.max(0,pt.life/pt.maxLife);
       ctx.globalAlpha=a;
-      if(pt.beamTo!==undefined){
-        var impact=worldToScreen(pt.x,0,pt.beamTo);
-        ctx.strokeStyle="#fff6cf";
-        ctx.lineWidth=4;
-        ctx.beginPath(); ctx.moveTo(impact.x,0); ctx.lineTo(impact.x,impact.y); ctx.stroke();
-      } else if(pt.ring){
+      if(pt.ring){
         var pR=worldToScreen(pt.x,6,pt.y);
         ctx.strokeStyle=pt.color; ctx.lineWidth=3;
         ctx.beginPath(); ctx.arc(pR.x,pR.y,pt.size*(1-a)+4,0,Math.PI*2); ctx.stroke();
@@ -2248,7 +2543,10 @@
       for(var step=0; step<state.speedMult && !state.gameOver; step++) update(dt);
     }
     updateAtmosphere(dt);
-    syncMeshes(now);
+    var gdt=state.paused ? 0 : dt*state.speedMult;
+    updateFx(gdt);
+    syncProjectiles(gdt);
+    syncMeshes(now, gdt);
     positionIsoCamera(shakeDX,shakeDY);
     renderer.render(scene,camera);
     drawOverlay(now);
