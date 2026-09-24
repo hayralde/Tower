@@ -1289,15 +1289,34 @@
   }
 
   var currentWaveMult={hp:1,sp:1,armor:0,evasion:0};
+  var lastEarlyCall=0;
   function startNextWave(){
-    if(state.waveActive||state.gameOver) return;
+    if(state.gameOver) return;
+    var early=state.waveActive;
+    if(early){
+      var nowMs=performance.now();
+      if(nowMs-lastEarlyCall<800) return;
+      lastEarlyCall=nowMs;
+      // the wave being overtaken is closed out now: its supply bonus is paid up front
+      var bonus=16+state.wave*3;
+      state.money+=bonus;
+      var leakedSoFar=state.waveLeaks.warrior+state.waveLeaks.hopper+state.waveLeaks.tanker+state.waveLeaks.brain;
+      state.waveHistory.push({
+        wave:state.wave, moneyAfter:state.money, livesAfter:state.lives,
+        spawned:state.waveSpawned, leaked:leakedSoFar, leaksByType:state.waveLeaks, early:true,
+        towers:towers.map(function(t){ return {type:t.typeId, level:t.level, col:t.col, row:t.row}; })
+      });
+      addLog("Onda "+(state.wave+1)+" convocada antes da hora. Bônus da onda "+state.wave+" adiantado: +"+bonus+"¢.","good");
+    }
     state.wave++;
     var w=buildWave(state.wave);
-    state.spawnQueue=w.queue;
+    var mult={hp:w.hpMult, sp:w.spMult, armor:w.armorGrow, evasion:w.evasionGrow};
+    w.queue.forEach(function(q){ q.m=mult; });
+    state.spawnQueue=early ? state.spawnQueue.concat(w.queue) : w.queue;
     currentWaveMult.hp=w.hpMult; currentWaveMult.sp=w.spMult;
     currentWaveMult.armor=w.armorGrow; currentWaveMult.evasion=w.evasionGrow;
     state.waveActive=true;
-    state.spawnTimer=0;
+    if(!early) state.spawnTimer=0;
     state.waveLeaks={warrior:0,hopper:0,tanker:0,brain:0};
     state.waveSpawned=w.queue.length;
     addLog("Onda "+state.wave+" detectada"+(w.isBoss?" — ALVO DE ALTO VALOR":"")+".","info");
@@ -1538,7 +1557,8 @@
       state.spawnTimer-=dtMs;
       if(state.spawnTimer<=0){
         var next=state.spawnQueue.shift();
-        spawnEnemy(next.type,currentWaveMult.hp,currentWaveMult.sp,currentWaveMult.armor,currentWaveMult.evasion);
+        var nm=next.m||currentWaveMult;
+        spawnEnemy(next.type,nm.hp,nm.sp,nm.armor,nm.evasion);
         state.spawnTimer=next.gap;
       }
     } else if(enemies.length===0){
@@ -2127,6 +2147,8 @@
     if(state.gameOver) elStatus.textContent="Operação encerrada";
     else if(state.waveActive) elStatus.textContent="Combate em andamento";
     else elStatus.textContent="Próxima onda em "+Math.max(0,Math.ceil(state.betweenTimer/1000))+"s";
+    var startLabel=state.waveActive ? "Chamar Próxima Onda" : "Iniciar Onda";
+    if(btnStart.textContent!==startLabel) btnStart.textContent=startLabel;
     refreshArmory();
   }
 
@@ -2201,14 +2223,14 @@
     if(n>=1 && n<=TOWER_ORDER.length) armTower(TOWER_ORDER[n-1]);
   });
 
-  btnStart.addEventListener("click",function(){ if(!state.waveActive){ state.betweenTimer=0; startNextWave(); } });
+  btnStart.addEventListener("click",function(){ state.betweenTimer=0; startNextWave(); });
   btnPause.addEventListener("click",function(){
     state.paused=!state.paused;
     btnPause.textContent= state.paused?"Continuar":"Pausar";
     btnPause.classList.toggle("toggled",state.paused);
   });
   btnSpeed.addEventListener("click",function(){
-    state.speedMult = state.speedMult===1?2:1;
+    state.speedMult = state.speedMult>=3 ? 1 : state.speedMult+1;
     btnSpeed.textContent="Vel. x"+state.speedMult;
     btnSpeed.classList.toggle("toggled", state.speedMult!==1);
   });
@@ -2222,7 +2244,8 @@
     var dt=Math.min((now-last)/1000,0.05);
     last=now;
     if(!state.paused && !state.gameOver){
-      update(dt*state.speedMult);
+      // substeps instead of one big dt, so fast speeds don't let projectiles/enemies skip past each other
+      for(var step=0; step<state.speedMult && !state.gameOver; step++) update(dt);
     }
     updateAtmosphere(dt);
     syncMeshes(now);
