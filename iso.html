@@ -338,7 +338,14 @@
   .tower-card:hover{background:var(--panel-2);}
   .tower-card.active{background:#2e301d; box-shadow:inset 3px 0 0 var(--accent);}
   .tower-card.disabled{opacity:.42; cursor:not-allowed;}
-  .tower-card .icon{flex:none; width:34px; height:34px;}
+  .tower-card .icon{
+    flex:none; width:60px; height:60px;
+    display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(circle at 50% 60%, #2c2e1f, var(--bg-2) 70%);
+    border:1px solid var(--line-soft);
+  }
+  .tower-card .icon img{max-width:92%; max-height:92%; object-fit:contain; display:block;}
+  .tower-card.active .icon{border-color:var(--accent);}
   .tower-card .info{flex:1; min-width:0;}
   .tower-card .name-row{
     display:flex; justify-content:space-between; align-items:baseline; gap:6px;
@@ -832,6 +839,7 @@
     return base+mid+'</svg>';
   }
 
+  var ARMORY_ART={gunner:"mi9_l1.png", heavy:"morita_l1.png", flame:"tx7_l1.png", rocket:"yrex_l1.png", orbital:"orbital_l1.png"};
   function buildArmory(){
     elTowerList.innerHTML="";
     TOWER_ORDER.forEach(function(id,idx){
@@ -841,12 +849,14 @@
       card.type="button";
       card.dataset.id=id;
       card.innerHTML=
-        '<span class="icon">'+svgIcon(id,t.color)+'</span>'+
+        '<span class="icon"><img src="assets/towers/'+ARMORY_ART[id]+'" alt=""></span>'+
         '<span class="info">'+
           '<span class="name-row"><span class="name"><span class="key-hint">'+(idx+1)+'</span>'+t.name+'</span><span class="cost">'+t.cost+'¢</span></span>'+
           '<span class="desc">'+t.desc+'</span>'+
           '<span class="stats-row"><span>DMG '+t.damage+'</span><span>ALC '+(t.range>999?"∞":t.range)+'</span></span>'+
         '</span>';
+      var art=card.querySelector(".icon img");
+      art.addEventListener("error",function(){ art.parentNode.innerHTML=svgIcon(id,t.color); });
       card.addEventListener("click",function(){ armTower(id); });
       elTowerList.appendChild(card);
     });
@@ -973,15 +983,32 @@
     yrex:{file:"yrex_l1.png", w:444, h:480},
     orbital:{file:"orbital_l1.png", w:314, h:480}
   };
-  var spriteTextures={};
+  var spriteTextures={}, spriteTexturesFlipped={};
   (function loadSprites(){
     var loader=new THREE.TextureLoader();
     Object.keys(SPRITE_FILES).forEach(function(key){
       loader.load(SPRITE_BASE+SPRITE_FILES[key].file, function(tex){
         if(THREE.sRGBEncoding) tex.encoding=THREE.sRGBEncoding;
         spriteTextures[key]=tex;
+        var flipped=tex.clone();
+        flipped.repeat.x=-1; flipped.offset.x=1; flipped.needsUpdate=true;
+        spriteTexturesFlipped[key]=flipped;
       }, undefined, function(){ /* asset unavailable — tower keeps its procedural mesh */ });
     });
+  })();
+  // which way the barrel points in the source art; the sprite is mirrored when the target is on the other side
+  var ART_FACES_LEFT={mi9_l1:true, mi9_l2:true, mi9_l3:true, mi9_l3_firing:true, morita:false, tx7:true, yrex:true, orbital:false};
+  var FLASH_CFG={gunner:{size:18,color:0xffe7a0}, heavy:{size:30,color:0xffc070}, rocket:{size:26,color:0xff9050}, flame:{size:24,color:0xff8a30}, orbital:{size:44,color:0xfff2c0}};
+  var glowTexture=(function(){
+    var c=document.createElement("canvas"); c.width=c.height=64;
+    var g=c.getContext("2d");
+    var gr=g.createRadialGradient(32,32,0,32,32,32);
+    gr.addColorStop(0,"rgba(255,255,255,1)");
+    gr.addColorStop(0.25,"rgba(255,230,160,0.9)");
+    gr.addColorStop(0.6,"rgba(255,140,40,0.35)");
+    gr.addColorStop(1,"rgba(255,120,20,0)");
+    g.fillStyle=gr; g.fillRect(0,0,64,64);
+    return new THREE.CanvasTexture(c);
   })();
 
   var TOWER_SPRITE_HEIGHT={gunner:42, heavy:38, flame:36, rocket:42, orbital:46};
@@ -1018,8 +1045,17 @@
       shadowBlob.rotation.x=-Math.PI/2;
       shadowBlob.position.y=0.4;
       sGroup.add(shadowBlob);
+      var flash=new THREE.Sprite(new THREE.SpriteMaterial({
+        map:glowTexture, color:(FLASH_CFG[typeId]||FLASH_CFG.gunner).color,
+        transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, opacity:0
+      }));
+      flash.visible=false;
+      sGroup.add(flash);
       sGroup.userData.isSprite=true;
       sGroup.userData.sprite=sprite;
+      sGroup.userData.flash=flash;
+      sGroup.userData.w=width;
+      sGroup.userData.h=height;
       sGroup.userData.spriteKey=spriteKey;
       return sGroup;
     }
@@ -1153,16 +1189,36 @@
       var mesh=towerMeshes.get(t);
       if(!mesh) return;
       if(mesh.userData.isSprite){
+        var ud=mesh.userData, sp=ud.sprite, fl=ud.flash;
+        var ang=t.angle||0, ca=Math.cos(ang), sa=Math.sin(ang);
+        var firingLeft=t.firingUntil ? t.firingUntil-now : 0;
+        var firing=firingLeft>0;
         if(t.typeId==="orbital"){
-          mesh.userData.sprite.material.rotation=now*0.0014;
-        } else if(t.typeId==="gunner" && t.level>=3){
-          var firing=!!(t.firingUntil && now<t.firingUntil);
-          var wantKey=firing?"mi9_l3_firing":"mi9_l3";
-          if(mesh.userData.spriteKey!==wantKey && spriteTextures[wantKey]){
-            mesh.userData.sprite.material.map=spriteTextures[wantKey];
-            mesh.userData.sprite.material.needsUpdate=true;
-            mesh.userData.spriteKey=wantKey;
-          }
+          var pulse=firing ? 1+0.08*(firingLeft/(t.fireDur||450)) : 1+0.015*Math.sin(now*0.003+t.col);
+          sp.scale.set(ud.w*pulse, ud.h*pulse, 1);
+          sp.position.y=ud.h*pulse/2;
+        } else {
+          var key=spriteKeyFor(t.typeId, t.level, firing);
+          var a=worldToScreen(t.x,0,t.y), b=worldToScreen(t.x+ca*20,0,t.y+sa*20);
+          var flip=((b.x-a.x)<0)!==ART_FACES_LEFT[key];
+          var tex=(flip?spriteTexturesFlipped:spriteTextures)[key];
+          if(tex && sp.material.map!==tex){ sp.material.map=tex; sp.material.needsUpdate=true; ud.spriteKey=key; }
+          var kick=(t.recoil||0)*1.2;
+          if(t.typeId==="flame" && firing) kick=(Math.random()-0.5)*1.8;
+          sp.position.x=-ca*kick;
+          sp.position.z=-sa*kick;
+        }
+        if(firing){
+          var k=Math.max(0, firingLeft/(t.fireDur||180));
+          var size=(FLASH_CFG[t.typeId]||FLASH_CFG.gunner).size*(0.7+0.3*k);
+          if(t.typeId==="flame") size*=0.8+Math.random()*0.4;
+          fl.visible=true;
+          fl.material.opacity=k;
+          fl.scale.set(size,size,1);
+          if(t.typeId==="orbital") fl.position.set(0, ud.h*0.85, 0);
+          else fl.position.set(ca*ud.w*0.45, ud.h*0.55, sa*ud.w*0.45);
+        } else {
+          fl.visible=false;
         }
         return;
       }
@@ -1427,6 +1483,7 @@
       capped.forEach(function(o){ applyDamage(o.e,dps*dt,"flame"); });
       tower.flameTimer-=dtMs;
       if(capped.length>0){
+        tower.fireDur=120; tower.firingUntil=performance.now()+120;
         tower.angle=Math.atan2(capped[0].e.y-tower.y,capped[0].e.x-tower.x);
         if(tower.flameTimer<=0){
           tower.flameTimer=90;
@@ -1446,6 +1503,7 @@
     tower.cooldown=def.rate;
 
     if(tower.typeId==="orbital"){
+      tower.fireDur=450; tower.firingUntil=performance.now()+450;
       spawnFlash(target.x,target.y,"#f4d35e");
       particles.push({x:target.x,y:target.y-CH,vx:0,vy:900,life:CH/900,maxLife:CH/900,color:"#fff6cf",size:3,beamTo:target.y});
       var dmg=towerStat(tower,"damage");
@@ -1460,7 +1518,8 @@
     }
 
     tower.recoil = def.kind==="shell"?7 : def.kind==="rocket"?6 : 3;
-    if(tower.typeId==="gunner") tower.firingUntil=performance.now()+220;
+    tower.fireDur = tower.typeId==="gunner" ? 220 : 180;
+    tower.firingUntil=performance.now()+tower.fireDur;
     var speed = def.kind==="bullet"?420 : def.kind==="shell"?300:220;
     projectiles.push({
       x:tower.x,y:tower.y,targetId:target.id,speed:speed,

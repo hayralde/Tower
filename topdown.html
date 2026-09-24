@@ -338,7 +338,14 @@
   .tower-card:hover{background:var(--panel-2);}
   .tower-card.active{background:#2e301d; box-shadow:inset 3px 0 0 var(--accent);}
   .tower-card.disabled{opacity:.42; cursor:not-allowed;}
-  .tower-card .icon{flex:none; width:34px; height:34px;}
+  .tower-card .icon{
+    flex:none; width:60px; height:60px;
+    display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(circle at 50% 60%, #2c2e1f, var(--bg-2) 70%);
+    border:1px solid var(--line-soft);
+  }
+  .tower-card .icon img{max-width:92%; max-height:92%; object-fit:contain; display:block;}
+  .tower-card.active .icon{border-color:var(--accent);}
   .tower-card .info{flex:1; min-width:0;}
   .tower-card .name-row{
     display:flex; justify-content:space-between; align-items:baseline; gap:6px;
@@ -832,6 +839,7 @@
     return base+mid+'</svg>';
   }
 
+  var ARMORY_ART={gunner:"mi9_l1.png", heavy:"morita_l1.png", flame:"tx7_l1.png", rocket:"yrex_l1.png", orbital:"orbital_l1.png"};
   function buildArmory(){
     elTowerList.innerHTML="";
     TOWER_ORDER.forEach(function(id,idx){
@@ -841,12 +849,14 @@
       card.type="button";
       card.dataset.id=id;
       card.innerHTML=
-        '<span class="icon">'+svgIcon(id,t.color)+'</span>'+
+        '<span class="icon"><img src="assets/towers/'+ARMORY_ART[id]+'" alt=""></span>'+
         '<span class="info">'+
           '<span class="name-row"><span class="name"><span class="key-hint">'+(idx+1)+'</span>'+t.name+'</span><span class="cost">'+t.cost+'¢</span></span>'+
           '<span class="desc">'+t.desc+'</span>'+
           '<span class="stats-row"><span>DMG '+t.damage+'</span><span>ALC '+(t.range>999?"∞":t.range)+'</span></span>'+
         '</span>';
+      var art=card.querySelector(".icon img");
+      art.addEventListener("error",function(){ art.parentNode.innerHTML=svgIcon(id,t.color); });
       card.addEventListener("click",function(){ armTower(id); });
       elTowerList.appendChild(card);
     });
