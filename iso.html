@@ -1882,6 +1882,7 @@
         e.x=tgt[0]; e.y=tgt[1]; e.wp++;
         if(e.wp>=path.length){
           state.lives-=e.dmg;
+          baseHit(e.dmg);
           state.leaksByType[e.type]++;
           state.waveLeaks[e.type]++;
           addLog("Falha de contenção! "+ENEMIES[e.type].name+" atravessou. -"+e.dmg+" perímetro.","danger");
@@ -2206,15 +2207,6 @@
 
     drawPathInto(tx);
 
-    var bx=BASE_TILE[0]*TILE+TILE/2, by=BASE_TILE[1]*TILE+TILE/2;
-    tx.save();
-    tx.fillStyle="rgba(20,21,15,0.9)";
-    tx.beginPath(); tx.arc(bx,by,50,0,Math.PI*2); tx.fill();
-    tx.strokeStyle="#f0b400"; tx.lineWidth=4;
-    tx.setLineDash([10,8]); tx.globalAlpha=0.7;
-    tx.beginPath(); tx.arc(bx,by,44,0,Math.PI*2); tx.stroke();
-    tx.setLineDash([]); tx.globalAlpha=1;
-    tx.restore();
 
     return tc;
   }
@@ -2231,61 +2223,463 @@
   ground.receiveShadow=true;
   scene.add(ground);
 
+  // simple procedural base, only used if the base artwork can't be loaded
   function buildBaseMesh(){
     var group=new THREE.Group();
     var wallMat=new THREE.MeshStandardMaterial({color:0x2a2b1e, roughness:0.8});
     var accentMat=new THREE.MeshStandardMaterial({color:0xf0b400, roughness:0.5, metalness:0.3});
-    var darkMat=new THREE.MeshStandardMaterial({color:0x14150f, roughness:0.7});
-
     var platform=new THREE.Mesh(new THREE.CylinderGeometry(36,40,10,8), wallMat);
-    platform.position.y=5;
-    platform.castShadow=true; platform.receiveShadow=true;
+    platform.position.y=5; platform.castShadow=true; platform.receiveShadow=true;
     group.add(platform);
-
     var ring=new THREE.Mesh(new THREE.TorusGeometry(36,1.6,6,8), accentMat);
-    ring.rotation.x=Math.PI/2;
-    ring.position.y=10.3;
+    ring.rotation.x=Math.PI/2; ring.position.y=10.3;
     group.add(ring);
-
-    var dome=new THREE.Mesh(
-      new THREE.SphereGeometry(17,14,8,0,Math.PI*2,0,Math.PI/2),
-      darkMat
-    );
-    dome.position.y=10;
-    dome.castShadow=true;
-    group.add(dome);
-
-    [[1,1],[1,-1],[-1,1],[-1,-1]].forEach(function(o){
-      var wt=new THREE.Mesh(new THREE.CylinderGeometry(3,3.6,20,8), wallMat);
-      wt.position.set(o[0]*25,15,o[1]*25);
-      wt.castShadow=true;
-      group.add(wt);
-      var cap=new THREE.Mesh(new THREE.ConeGeometry(4.2,7,8), accentMat);
-      cap.position.set(o[0]*25,28.5,o[1]*25);
-      group.add(cap);
-    });
-
-    var pole=new THREE.Mesh(new THREE.CylinderGeometry(1,1,16,6), darkMat);
-    pole.position.y=26;
-    group.add(pole);
-
-    var beacon=new THREE.Group();
-    beacon.position.y=34;
-    var beaconLight=new THREE.Mesh(
-      new THREE.SphereGeometry(3.2,10,8),
-      new THREE.MeshStandardMaterial({color:0xfff6cf, emissive:0xffcf5c, emissiveIntensity:0.85})
-    );
-    beacon.add(beaconLight);
-    var beaconArm=new THREE.Mesh(new THREE.BoxGeometry(14,1,1.4), accentMat);
-    beacon.add(beaconArm);
-    group.add(beacon);
-    group.userData.beacon=beacon;
-
     return group;
   }
-  var baseMesh=buildBaseMesh();
-  baseMesh.position.set(BASE_TILE[0]*TILE+TILE/2, 0, BASE_TILE[1]*TILE+TILE/2);
-  scene.add(baseMesh);
+  var baseMesh=null;
+
+  // ---------------- Federal Defense Base: pre-rendered art that breaks apart as the perimeter falls ----------------
+  // The camera never rotates, so a camera-facing card of isometric art reads as a solid building.
+  // fu/fv = where the centre of the base's ground footprint sits in the (trimmed) image, v measured from the bottom.
+  var BASE_ART={
+    intact:{file:"assets/base/base_intact.png", srcW:1534, srcH:1534, trimL:52, trimT:18, fu:0.504, fv:0.40, oct:1530},
+    destroyed:{file:"assets/base/base_destroyed.png", srcW:1568, srcH:1267, trimL:172, trimT:8, fu:0.501, fv:0.52, oct:1565}
+  };
+  var BASE_D=175;             // world diameter of the walled octagon
+  var PERIMETER_MAX=20;
+  var baseCenter=new THREE.Vector3(BASE_TILE[0]*TILE+TILE/2, 0, BASE_TILE[1]*TILE+TILE/2);
+  var base={ready:false, destroyed:false, hp:-1, stage:-1, flash:0, W:0, H:0, art:BASE_ART.intact,
+            smokeT:[], fireT:[], restPos:new THREE.Vector3()};
+
+  // footprint tiles can't take towers
+  (function markBaseFootprint(){
+    for(var r=BASE_TILE[1]-1;r<=BASE_TILE[1]+1;r++) for(var c=BASE_TILE[0]-1;c<=BASE_TILE[0]+1;c++){
+      if(c>=0&&c<COLS&&r>=0&&r<ROWS) buildable[r][c]=false;
+    }
+  })();
+
+  // drawn before everything else and without depth writes, so towers, bugs and effects always sit on top of it
+  ground.renderOrder=-2;
+  var baseSprite=new THREE.Sprite(new THREE.SpriteMaterial({transparent:false, alphaTest:0.5, depthWrite:false}));
+  baseSprite.renderOrder=-1;
+  baseSprite.visible=false;
+  scene.add(baseSprite);
+
+  var baseShadow=new THREE.Mesh(new THREE.CircleGeometry(1,32),
+    new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:0.38, depthWrite:false}));
+  baseShadow.rotation.x=-Math.PI/2;
+  baseShadow.scale.set(BASE_D*0.5, BASE_D*0.5, 1);
+  baseShadow.position.set(baseCenter.x, 0.35, baseCenter.z);
+  baseShadow.renderOrder=-1;
+  scene.add(baseShadow);
+
+  var baseAura=new THREE.Mesh(new THREE.CircleGeometry(1,32),
+    new THREE.MeshBasicMaterial({color:0x7ed321, transparent:true, opacity:0.1, blending:THREE.AdditiveBlending, depthWrite:false}));
+  baseAura.rotation.x=-Math.PI/2;
+  baseAura.scale.set(BASE_D*0.62, BASE_D*0.62, 1);
+  baseAura.position.set(baseCenter.x, 0.4, baseCenter.z);
+  scene.add(baseAura);
+  var AURA=[[0x7ed321,0],[0xf5a623,0.035],[0xff8c00,0.055],[0xff2d55,0.08],[0xff2d55,0.1]];
+
+  var alertLights=[];
+  [[0.667,0.878],[0.256,0.578],[0.72,0.5]].forEach(function(p){
+    var s=new THREE.Sprite(new THREE.SpriteMaterial({map:fireTex, color:0xff2020, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false}));
+    s.visible=false; s.userData.u=p[0]; s.userData.v=p[1];
+    scene.add(s); alertLights.push(s);
+  });
+
+  var _camR=new THREE.Vector3(), _camU=new THREE.Vector3(), _camF=new THREE.Vector3();
+  function readCameraAxes(){
+    camera.updateMatrixWorld();
+    _camR.setFromMatrixColumn(camera.matrixWorld,0).normalize();
+    _camU.setFromMatrixColumn(camera.matrixWorld,1).normalize();
+    camera.getWorldDirection(_camF);
+  }
+  function placeBase(){
+    readCameraAxes();
+    var art=base.art, k=BASE_D/art.oct;
+    base.W=art.srcW*k; base.H=art.srcH*k;
+    baseSprite.center.set(art.fu, art.fv);
+    baseSprite.scale.set(base.W, base.H, 1);
+    // slide the card toward the camera along the view ray until its bottom edge sits at ground level;
+    // every pixel keeps its screen position but nothing of the card ends up under the terrain
+    var t=art.fv*base.H*_camU.y/(-_camF.y);
+    base.restPos.copy(baseCenter).addScaledVector(_camF,-t);
+    baseSprite.position.copy(base.restPos);
+  }
+  // world point on the base card for an image coordinate (u from left, v from bottom), nudged toward the camera
+  function basePoint(u,v,out){
+    out=out||new THREE.Vector3();
+    return out.copy(base.restPos)
+      .addScaledVector(_camR,(u-base.art.fu)*base.W)
+      .addScaledVector(_camU,(v-base.art.fv)*base.H)
+      .addScaledVector(_camF,-4);
+  }
+
+  // ---- intact art + progressive cracks, composited into one canvas texture ----
+  var baseImgIntact=null, baseTexDestroyed=null;
+  var baseCanvas=document.createElement("canvas"), baseCtx=baseCanvas.getContext("2d"), baseCanvasTex=null;
+  // crack lines from the damage spec, in its 400x400 layout box over the original 1600px art
+  var CRACKS=[
+    {minLost:5, width:1.2, color:"#1a1a0a", alpha:0.9, paths:[[[80,120],[140,180],[130,210],[180,240]],[[220,90],[240,150],[280,170]],[[300,220],[250,250],[260,300]]]},
+    {minLost:10, width:1.6, color:"#000", alpha:0.85, paths:[[[50,200],[110,220],[160,200],[200,260],[180,310]],[[200,100],[210,160],[260,190],[320,180]],[[120,280],[170,300],[230,320],[300,310]],[[60,150],[80,185],[70,220]]]},
+    {minLost:15, width:2.2, color:"#000", alpha:1, paths:[[[20,180],[90,200],[140,190],[200,240],[260,230],[340,260]],[[150,60],[180,120],[160,180],[220,220],[200,300],[260,340]],[[80,320],[140,300],[200,310],[280,290],[350,320]],[[100,100],[130,140],[90,180],[120,230]]]}
+  ];
+  function jag(seed){ var x=Math.sin(seed*91.7)*43758.5; return x-Math.floor(x)-0.5; }
+  function redrawIntactBase(hp){
+    var img=baseImgIntact, c=baseCtx;
+    var lost=PERIMETER_MAX-hp;
+    var sc=img.width/BASE_ART.intact.srcW;
+    function P(x,y){ return [(x*4-BASE_ART.intact.trimL)*sc, (y*4-BASE_ART.intact.trimT)*sc]; }
+    c.globalCompositeOperation="source-over";
+    c.clearRect(0,0,baseCanvas.width,baseCanvas.height);
+    if(lost>0){
+      c.save();
+      c.globalAlpha=Math.min(0.85, lost/18);
+      if(lost>=10){
+        c.fillStyle="rgba(0,0,0,0.25)";
+        [[180,260,70,35],[250,200,55,30]].forEach(function(e){
+          var p=P(e[0],e[1]);
+          c.beginPath(); c.ellipse(p[0],p[1],e[2]*4*sc,e[3]*4*sc,0,0,Math.PI*2); c.fill();
+        });
+      }
+      CRACKS.forEach(function(tier,ti){
+        if(lost<tier.minLost) return;
+        tier.paths.forEach(function(path,pi){
+          c.beginPath();
+          path.forEach(function(pt,i){
+            var p=P(pt[0],pt[1]);
+            if(i===0){ c.moveTo(p[0],p[1]); return; }
+            var q=P(path[i-1][0],path[i-1][1]);
+            // jagged midpoints so the cracks don't look ruler-drawn
+            for(var s=1;s<=3;s++){
+              var f=s/4, j=jag(ti*97+pi*31+i*7+s)*14*sc*4;
+              c.lineTo(q[0]+(p[0]-q[0])*f+j, q[1]+(p[1]-q[1])*f-j);
+            }
+            c.lineTo(p[0],p[1]);
+          });
+          c.strokeStyle=tier.color; c.lineWidth=tier.width*4*sc*1.4; c.globalAlpha=Math.min(0.85,lost/18)*tier.alpha;
+          c.stroke();
+        });
+      });
+      c.restore();
+      // keep the damage only where the building is
+      c.globalCompositeOperation="destination-in";
+      c.drawImage(img,0,0);
+    }
+    c.globalCompositeOperation="destination-over";
+    c.drawImage(img,0,0);
+    c.globalCompositeOperation="source-over";
+    baseCanvasTex.needsUpdate=true;
+  }
+
+  (function loadBaseArt(){
+    var img=new Image();
+    img.onload=function(){
+      baseImgIntact=img;
+      baseCanvas.width=img.width; baseCanvas.height=img.height;
+      baseCanvasTex=new THREE.CanvasTexture(baseCanvas);
+      if(THREE.sRGBEncoding) baseCanvasTex.encoding=THREE.sRGBEncoding;
+      baseSprite.material.map=baseCanvasTex;
+      baseSprite.material.needsUpdate=true;
+      base.ready=true;
+      base.hp=-1;
+      placeBase();
+      baseSprite.visible=true;
+      buildBaseLife();
+    };
+    img.onerror=function(){
+      baseMesh=buildBaseMesh();
+      baseMesh.position.copy(baseCenter);
+      scene.add(baseMesh);
+      baseShadow.visible=false;
+    };
+    img.src=BASE_ART.intact.file;
+    new THREE.TextureLoader().load(BASE_ART.destroyed.file, function(tex){
+      if(THREE.sRGBEncoding) tex.encoding=THREE.sRGBEncoding;
+      baseTexDestroyed=tex;
+    });
+  })();
+
+  // ---- life around the base: waving flags, patrolling troopers, blinking lights ----
+  // Positions are picked on the 900px intact artwork, then projected back into the world along the view ray
+  // onto a plane at the given height, so each object lands exactly on the spot it was picked from.
+  var baseLife={built:false, flags:[], soldiers:[], lights:[], root:new THREE.Group()};
+  scene.add(baseLife.root);
+  function artToWorld(px,py,h,out){
+    var o=basePoint(px/900, 1-py/900, new THREE.Vector3());
+    var s=(h-o.y)/_camF.y;
+    return (out||new THREE.Vector3()).copy(o).addScaledVector(_camF,s);
+  }
+
+  var flagTexture=(function(){
+    var c=document.createElement("canvas"); c.width=96; c.height=60;
+    var g=c.getContext("2d");
+    g.fillStyle="#2f3520"; g.fillRect(0,0,96,60);
+    g.fillStyle="#f0b400"; g.fillRect(0,0,8,60);
+    g.fillRect(0,0,96,4); g.fillRect(0,56,96,4);
+    g.strokeStyle="#f0b400"; g.lineWidth=3;
+    g.beginPath(); g.arc(54,30,17,0,Math.PI*2); g.stroke();
+    g.fillStyle="#f0b400"; g.beginPath();
+    for(var i=0;i<10;i++){ var a=-Math.PI/2+i*Math.PI/5, r=i%2?6:15; g.lineTo(54+Math.cos(a)*r,30+Math.sin(a)*r); }
+    g.closePath(); g.fill();
+    var t=new THREE.CanvasTexture(c);
+    if(THREE.sRGBEncoding) t.encoding=THREE.sRGBEncoding;
+    return t;
+  })();
+
+  function makeFlag(px,py,h,size){
+    var g=new THREE.Group();
+    artToWorld(px,py,h,g.position);
+    var poleH=14*size;
+    part(gCyl(0.35,0.45,poleH,6), M("black"), 0,poleH/2,0, g);
+    part(gSphere(0.8,8,6), smat(PAL.brass,{metalness:0.7, roughness:0.35}), 0,poleH+0.5,0, g);
+    var w=12*size, hh=7.5*size;
+    var geo=new THREE.PlaneGeometry(w,hh,14,4);
+    geo.translate(w/2,0,0);
+    var cloth=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({map:flagTexture, side:THREE.DoubleSide, roughness:0.85}));
+    cloth.position.y=poleH-hh/2-0.3;
+    cloth.castShadow=true;
+    g.add(cloth);
+    // cloth extends toward screen-right and faces the camera, so the waving reads clearly
+    g.rotation.y=Math.PI/4;
+    baseLife.root.add(g);
+    baseLife.flags.push({group:g, cloth:cloth, base:Float32Array.from(geo.attributes.position.array), w:w, phase:Math.random()*6});
+  }
+
+  function makeTrooper(){
+    var g=new THREE.Group();
+    var armor=smat(0x8c8a66), uniform=smat(0x55583c), helmet=smat(0x3b4228), dark=M("black");
+    var legs=[];
+    [-0.75,0.75].forEach(function(z){
+      var hip=new THREE.Group(); hip.position.set(0,3.2,z); g.add(hip);
+      part(gBox(1.1,3.2,1.1), uniform, 0,-1.6,0, hip);
+      legs.push(hip);
+    });
+    part(gBox(1.9,2.8,2.6), armor, 0,4.6,0, g);
+    part(gSphere(0.85,10,8), smat(0xc9a27e), 0,6.5,0, g);
+    part(gSphere(1.05,10,6,Math.PI/2), helmet, 0,6.65,0, g);
+    var rifle=part(gBox(3.8,0.55,0.55), dark, 1.3,4.8,0.9, g);
+    rifle.rotation.z=0.15;
+    g.userData.legs=legs;
+    g.traverse(function(o){ if(o.isMesh) o.castShadow=true; });
+    return g;
+  }
+  function addPatrol(points, h, speed, idle){
+    var pts=points.map(function(p){ return artToWorld(p[0],p[1],h); });
+    var m=makeTrooper();
+    m.position.copy(pts[0]);
+    baseLife.root.add(m);
+    baseLife.soldiers.push({mesh:m, pts:pts, idx:1, speed:speed, idle:!!idle, phase:Math.random()*6, look:Math.random()*6});
+  }
+
+  function addLight(px,py,color,size,mode,offset){
+    var s=new THREE.Sprite(new THREE.SpriteMaterial({map:fireTex, color:color, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false}));
+    basePoint(px/900, 1-py/900, s.position);
+    s.scale.set(size,size,1);
+    baseLife.root.add(s);
+    baseLife.lights.push({sprite:s, size:size, mode:mode, offset:offset||0});
+  }
+
+  function buildBaseLife(){
+    if(baseLife.built) return;
+    baseLife.built=true;
+    readCameraAxes();
+    makeFlag(248,588,16,1);        // left gate pillar
+    makeFlag(395,600,16,1);        // right gate pillar
+    makeFlag(688,135,62,0.9);      // command tower railing
+    makeFlag(842,498,16,0.9);      // east wall corner
+    addPatrol([[612,555],[682,512],[762,542],[702,592]], 7, 9);          // helipad sweep
+    addPatrol([[318,572],[428,592],[518,566],[428,592]], 7, 8);          // front yard to the stairs
+    addPatrol([[575,470],[640,440],[705,468],[640,440]], 7, 7);          // supply crates by the tower
+    addPatrol([[300,600]], 7, 0, true);                                   // gate sentry
+    addPatrol([[745,580]], 7, 0, true);                                   // helipad sentry
+    addLight(648,52,0xff2a1a,6,"blink",0);        // antenna beacons
+    addLight(560,66,0xff2a1a,5,"blink",0.5);
+    addLight(603,538,0xffd23a,4,"chase",0);       // helipad landing lights
+    addLight(700,503,0xffd23a,4,"chase",1);
+    addLight(762,556,0xffd23a,4,"chase",2);
+    addLight(655,592,0xffd23a,4,"chase",3);
+    addLight(480,368,0x4aa8ff,26,"pulse",0);      // shield generator dome
+  }
+
+  function syncBaseLife(now, gdt, stage){
+    if(!baseLife.built) return;
+    baseLife.root.visible=!base.destroyed;
+    if(base.destroyed) return;
+    var t=now*0.001;
+    baseLife.flags.forEach(function(f){
+      var pos=f.cloth.geometry.attributes.position, a=pos.array, b=f.base;
+      for(var i=0;i<a.length;i+=3){
+        var x=b[i], k=x/f.w;
+        a[i+2]=Math.sin(x*0.55-t*7+f.phase)*k*2.2+Math.sin(x*0.9-t*11+f.phase)*k*0.6;
+        a[i+1]=b[i+1]-k*k*0.8+Math.sin(x*0.4-t*5+f.phase)*k*0.5;
+      }
+      pos.needsUpdate=true;
+      f.cloth.geometry.computeVertexNormals();
+    });
+    // troopers hurry once the base is taking real damage
+    var hurry=stage>=2 ? 2 : 1;
+    baseLife.soldiers.forEach(function(s){
+      var m=s.mesh, legs=m.userData.legs;
+      if(s.idle){
+        s.look+=gdt*0.6*hurry;
+        m.rotation.y=Math.sin(s.look)*1.2+Math.PI*0.75;
+        legs[0].rotation.z=0; legs[1].rotation.z=0;
+        return;
+      }
+      var tgt=s.pts[s.idx];
+      var dx=tgt.x-m.position.x, dz=tgt.z-m.position.z, dy=tgt.y-m.position.y, d=Math.sqrt(dx*dx+dz*dz);
+      var step=s.speed*hurry*gdt;
+      if(d<=step){
+        m.position.copy(tgt);
+        s.idx=(s.idx+1)%s.pts.length;
+      } else {
+        m.position.x+=dx/d*step; m.position.z+=dz/d*step; m.position.y+=dy/d*step;
+        m.rotation.y=-Math.atan2(dz,dx);
+      }
+      s.phase+=gdt*9*hurry;
+      var sw=Math.sin(s.phase)*0.6;
+      legs[0].rotation.z=sw; legs[1].rotation.z=-sw;
+    });
+    baseLife.lights.forEach(function(l){
+      var o;
+      if(l.mode==="blink") o=((t+l.offset)%1)<0.35 ? 1 : 0.08;
+      else if(l.mode==="chase") o=Math.floor(t*4)%4===l.offset ? 1 : 0.15;
+      else o=0.35+0.25*Math.sin(t*2.4);
+      l.sprite.material.opacity=o;
+    });
+  }
+
+  function baseStageFor(hp){ return hp<=0?4 : hp<=5?3 : hp<=10?2 : hp<=15?1 : 0; }
+  var SHAKE_AMP=[0,0.45,1.0,1.8,2.2];
+  var SMOKE_COUNT=[0,3,6,9,9];
+  var FIRE_POINTS=[[0.31,0.2,1],[0.69,0.26,0.8],[0.51,0.32,0.75],[0.64,0.6,0.55]];
+  var _bp=new THREE.Vector3();
+
+  // bits of wall thrown off the base when a bug breaks through
+  function spawnDebris(p, n){
+    var mats=[smat(0x5a5f45),smat(0x6f705f),smat(0x3b4228)];
+    for(var i=0;i<n;i++) (function(){
+      var sz=1.4+Math.random()*2.6;
+      var m=new THREE.Mesh(gBox(1,1,1), mats[i%3]);
+      m.scale.set(sz,sz*0.7,sz*1.2);
+      m.castShadow=true;
+      m.position.copy(p);
+      var a=Math.random()*Math.PI*2, sp=40+Math.random()*70;
+      var vx=Math.cos(a)*sp, vz=Math.sin(a)*sp, vy=50+Math.random()*80;
+      var rx=(Math.random()-0.5)*14, rz=(Math.random()-0.5)*14, landed=false;
+      addFx(m,1.4+Math.random()*0.6,function(o,pr,dt){
+        if(!landed){
+          vy-=260*dt;
+          o.position.x+=vx*dt; o.position.z+=vz*dt; o.position.y+=vy*dt;
+          o.rotation.x+=rx*dt; o.rotation.z+=rz*dt;
+          if(o.position.y<=sz*0.35){ o.position.y=sz*0.35; landed=true; }
+        }
+        if(pr>0.75){ var k=1-(pr-0.75)/0.25; o.scale.set(sz*k,sz*0.7*k,sz*1.2*k); }
+      });
+    })();
+  }
+
+  function baseHit(dmg){
+    if(!base.ready) return;
+    base.flash=1;
+    var gate=basePoint(0.33,0.31,_bp);
+    spawnExplosion(gate.x,gate.y,gate.z,18+dmg*6);
+    spawnDebris(gate,4+dmg*3);
+    var chip=basePoint(0.2+Math.random()*0.6,0.3+Math.random()*0.4);
+    spawnSparks(chip.x,chip.y,chip.z,5+dmg*2,0xffc070,110);
+    screenShakeT=Math.max(screenShakeT,0.12+0.04*dmg);
+  }
+
+  function syncBase(now, gdt){
+    if(!base.ready) return;
+    var hp=Math.max(0,state.lives);
+    var stage=baseStageFor(hp);
+    var wantDestroyed=hp<=0;
+    if(wantDestroyed!==base.destroyed && (!wantDestroyed || baseTexDestroyed)){
+      base.destroyed=wantDestroyed;
+      base.art=wantDestroyed?BASE_ART.destroyed:BASE_ART.intact;
+      var mat=baseSprite.material;
+      mat.map=wantDestroyed?baseTexDestroyed:baseCanvasTex;
+      // the collapsed art has semi-transparent smoke, which needs blending
+      mat.transparent=wantDestroyed; mat.alphaTest=wantDestroyed?0.02:0.5;
+      mat.needsUpdate=true;
+      placeBase();
+      if(wantDestroyed){
+        for(var b=0;b<5;b++){ var bp=basePoint(0.2+Math.random()*0.6,0.25+Math.random()*0.5); spawnExplosion(bp.x,bp.y,bp.z,40+Math.random()*30); }
+        spawnDebris(basePoint(0.5,0.4),26);
+        screenShakeT=Math.max(screenShakeT,0.6);
+      }
+    }
+    if(hp!==base.hp){
+      base.hp=hp;
+      if(!base.destroyed) redrawIntactBase(hp);
+    }
+    if(stage!==base.stage){
+      base.stage=stage;
+      baseAura.material.color.setHex(AURA[stage][0]);
+      base.smokeT.length=0; base.fireT.length=0;
+    }
+    baseAura.material.opacity=AURA[stage][1]*(stage>=3 ? 0.75+0.25*Math.sin(now*0.008) : 1);
+
+    // darken as it takes damage, reddish cast when critical, hit flash on top
+    var lost=PERIMETER_MAX-hp;
+    var br=base.destroyed ? 0.62 : Math.max(0.45, 1-lost*0.03);
+    base.flash=Math.max(0, base.flash-gdt*4);
+    var f=base.flash;
+    baseSprite.material.color.setRGB(
+      br*(1+f*1.1),
+      br*(hp<=5&&!base.destroyed?0.9:1)*(1+f*0.25),
+      br*(hp<=5&&!base.destroyed?0.86:1)*(1+f*0.2)
+    );
+
+    // tremor
+    var amp=SHAKE_AMP[stage];
+    baseSprite.position.copy(base.restPos);
+    if(amp>0 && gdt>0){
+      baseSprite.position.addScaledVector(_camR,(Math.random()-0.5)*amp).addScaledVector(_camU,(Math.random()-0.5)*amp);
+    }
+
+    if(gdt>0){
+      // smoke columns rising from the damaged structure
+      var ns=SMOKE_COUNT[stage];
+      for(var i=0;i<ns;i++){
+        base.smokeT[i]=(base.smokeT[i]===undefined ? i*0.13 : base.smokeT[i])-gdt;
+        if(base.smokeT[i]<=0){
+          base.smokeT[i]=0.35+Math.random()*0.3;
+          var sp=basePoint((25+(i*11)%55)/100, (18+(i%3)*12)/100, _bp);
+          spawnSmoke(sp.x+(Math.random()-0.5)*4, sp.y, sp.z+(Math.random()-0.5)*4, 12+Math.random()*7, 2.2+Math.random()*0.8,
+            {color:i%2?0x7a786c:0x5c5a50, opacity:0.62, rise:24, vx:6, vz:-3});
+        }
+      }
+      // fires from medium damage onward (all four points when critical or destroyed)
+      if(stage>=2){
+        var nf=stage>=3 ? 4 : 2;
+        for(var fi=0;fi<nf;fi++){
+          base.fireT[fi]=(base.fireT[fi]||0)-gdt;
+          if(base.fireT[fi]<=0){
+            base.fireT[fi]=0.045+Math.random()*0.03;
+            var fp=FIRE_POINTS[fi], s=fp[2];
+            var fw=basePoint(fp[0]+(Math.random()-0.5)*0.05, fp[1], _bp);
+            spawnFire(fw.x,fw.y,fw.z, (Math.random()-0.5)*10, 26+Math.random()*22, (Math.random()-0.5)*10, (4+Math.random()*3)*s, 0.55+Math.random()*0.2);
+          }
+        }
+        if(!base.destroyed && Math.random()<(stage>=3?0.12:0.06)){
+          var kp=basePoint(0.3+Math.random()*0.4, 0.25+Math.random()*0.5, _bp);
+          spawnSparks(kp.x,kp.y,kp.z,2,0xffea88,70);
+        }
+      }
+    }
+
+    // breach alarm lights when critical
+    var alarm=stage===3 && Math.floor(now/450)%2===0;
+    alertLights.forEach(function(s){
+      s.visible=alarm;
+      if(alarm){ basePoint(s.userData.u, s.userData.v, s.position); s.scale.set(14,14,1); }
+    });
+    syncBaseLife(now, gdt, stage);
+  }
 
   // ---------------- 2D overlay (HUD-in-world layer) ----------------
   function drawGhost(){
@@ -2547,6 +2941,7 @@
     updateFx(gdt);
     syncProjectiles(gdt);
     syncMeshes(now, gdt);
+    syncBase(now, gdt);
     positionIsoCamera(shakeDX,shakeDY);
     renderer.render(scene,camera);
     drawOverlay(now);
