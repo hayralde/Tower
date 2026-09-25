@@ -905,7 +905,9 @@
   scene.fog=new THREE.Fog(0x0d0c08, CW*0.85, CW*1.7);
 
   var ISO_VIEWSIZE=CH*0.58, ISO_ASPECT=CW/CH;
-  var ISO_ELEV=Math.PI/4.5, ISO_AZIMUTH=Math.PI/4, ISO_DIST=900;
+  // azimuth rotated 90° from the "natural" iso angle so the pasted reference art (drawn at its own fixed
+  // angle) reads upright in the diamond view instead of crooked, without touching the texture or the path
+  var ISO_ELEV=Math.PI/4.5, ISO_AZIMUTH=Math.PI/4+Math.PI/2, ISO_DIST=900;
   var camera=new THREE.OrthographicCamera(-ISO_VIEWSIZE*ISO_ASPECT,ISO_VIEWSIZE*ISO_ASPECT,ISO_VIEWSIZE,-ISO_VIEWSIZE,0.1,3000);
   var isoCamY=Math.sin(ISO_ELEV)*ISO_DIST, isoHoriz=Math.cos(ISO_ELEV)*ISO_DIST;
   camera.up.set(0,1,0);
