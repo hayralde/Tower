@@ -2869,10 +2869,29 @@
     var topTex=new THREE.CanvasTexture(tc2);
     if(THREE.sRGBEncoding) topTex.encoding=THREE.sRGBEncoding;
     var topMat=new THREE.MeshStandardMaterial({map:topTex, roughness:0.96, color:0xb9895a});
-    var body=new THREE.Mesh(new THREE.BoxGeometry(w,MESA_H,dep), [sideMat,sideMat,topMat,sideMat,sideMat,sideMat]);
-    body.position.set(MESA_CENTER.x, MESA_H/2, MESA_CENTER.z);
-    body.castShadow=true; body.receiveShadow=true;
-    scene.add(body);
+    // two stacked tiers (wide skirt + narrower upper terrace) instead of a single box, so it reads as an
+    // eroded mesa/canyon formation rather than a plain block — inspired by the reference art's stepped silhouette
+    var skirtScale=1.42, lowerH=MESA_H*0.44, upperH=MESA_H-lowerH;
+    var lowerW=w*skirtScale, lowerD=dep*skirtScale;
+    var skirtX0=MESA_CENTER.x-lowerW/2, skirtX1=MESA_CENTER.x+lowerW/2, skirtZ0=MESA_CENTER.z-lowerD/2, skirtZ1=MESA_CENTER.z+lowerD/2;
+    var lowerBody=new THREE.Mesh(new THREE.BoxGeometry(lowerW,lowerH,lowerD), sideMat);
+    lowerBody.position.set(MESA_CENTER.x, lowerH/2, MESA_CENTER.z);
+    lowerBody.castShadow=true; lowerBody.receiveShadow=true;
+    scene.add(lowerBody);
+    var upperBody=new THREE.Mesh(new THREE.BoxGeometry(w,upperH,dep), [sideMat,sideMat,topMat,sideMat,sideMat,sideMat]);
+    upperBody.position.set(MESA_CENTER.x, lowerH+upperH/2, MESA_CENTER.z);
+    upperBody.castShadow=true; upperBody.receiveShadow=true;
+    scene.add(upperBody);
+
+    // light guard-rail around the top platform, matching the tech-outpost look of the reference art
+    var railMat=smat(0xc7cdd6,{metalness:0.5, roughness:0.4});
+    [[w,0,0,MESA_Z0],[w,0,0,MESA_Z1],[0,dep,MESA_X0,0],[0,dep,MESA_X1,0]].forEach(function(r){
+      var isXRun=r[0]>0;
+      var bar=new THREE.Mesh(gBox(isXRun?w+2:1.6, 3, isXRun?1.6:dep+2), railMat);
+      bar.position.set(isXRun?MESA_CENTER.x:r[2], MESA_H+2, isXRun?r[3]:MESA_CENTER.z);
+      bar.castShadow=true;
+      scene.add(bar);
+    });
 
     var boulderMat=smat(0x8a6a44,{roughness:0.95});
     function boulder(x,y,z,s){
@@ -2883,12 +2902,21 @@
       m.castShadow=true; m.receiveShadow=true;
       scene.add(m);
     }
-    for(var b=0;b<18;b++){
+    // skirt-level boulders (wide, low tier)
+    for(var b=0;b<16;b++){
       var edge=Math.floor(Math.random()*4), tt=Math.random(), ex,ez;
-      if(edge===0){ ex=MESA_X0+tt*w; ez=MESA_Z0; } else if(edge===1){ ex=MESA_X1; ez=MESA_Z0+tt*dep; }
-      else if(edge===2){ ex=MESA_X0+tt*w; ez=MESA_Z1; } else { ex=MESA_X0; ez=MESA_Z0+tt*dep; }
-      var out=5+Math.random()*11, ang=Math.atan2(ez-MESA_CENTER.z, ex-MESA_CENTER.x);
-      boulder(ex+Math.cos(ang)*out, Math.random()*MESA_H*0.65, ez+Math.sin(ang)*out, 4+Math.random()*6);
+      if(edge===0){ ex=skirtX0+tt*lowerW; ez=skirtZ0; } else if(edge===1){ ex=skirtX1; ez=skirtZ0+tt*lowerD; }
+      else if(edge===2){ ex=skirtX0+tt*lowerW; ez=skirtZ1; } else { ex=skirtX0; ez=skirtZ0+tt*lowerD; }
+      var out2=4+Math.random()*9, ang2=Math.atan2(ez-MESA_CENTER.z, ex-MESA_CENTER.x);
+      boulder(ex+Math.cos(ang2)*out2, Math.random()*lowerH*0.7, ez+Math.sin(ang2)*out2, 4+Math.random()*6);
+    }
+    // terrace-level boulders (narrower, upper tier)
+    for(var b2=0;b2<14;b2++){
+      var edgeU=Math.floor(Math.random()*4), ttU=Math.random(), exU,ezU;
+      if(edgeU===0){ exU=MESA_X0+ttU*w; ezU=MESA_Z0; } else if(edgeU===1){ exU=MESA_X1; ezU=MESA_Z0+ttU*dep; }
+      else if(edgeU===2){ exU=MESA_X0+ttU*w; ezU=MESA_Z1; } else { exU=MESA_X0; ezU=MESA_Z0+ttU*dep; }
+      var outU=4+Math.random()*9, angU=Math.atan2(ezU-MESA_CENTER.z, exU-MESA_CENTER.x);
+      boulder(exU+Math.cos(angU)*outU, lowerH+Math.random()*upperH*0.6, ezU+Math.sin(angU)*outU, 4+Math.random()*5.5);
     }
     [[MESA_X0-3,MESA_Z0-3],[MESA_X1+3,MESA_Z0-3],[MESA_X0-3,MESA_Z1+3],[MESA_X1+3,MESA_Z1+3]].forEach(function(p){
       boulder(p[0],MESA_H-4,p[1],7+Math.random()*5);
@@ -2899,7 +2927,7 @@
     var steps=6, stepH=MESA_H/steps, stepD=7, stepW=w*0.4;
     for(var s2=0;s2<steps;s2++){
       var st=new THREE.Mesh(gBox(stepW,stepH,stepD), stepMat);
-      st.position.set(MESA_CENTER.x, stepH*(s2+0.5), MESA_Z1+stepD*0.5+(steps-1-s2)*stepD*0.6);
+      st.position.set(MESA_CENTER.x, stepH*(s2+0.5), skirtZ1+stepD*0.5+(steps-1-s2)*stepD*0.6);
       st.castShadow=true; st.receiveShadow=true;
       scene.add(st);
     }
