@@ -2869,17 +2869,13 @@
     var topTex=new THREE.CanvasTexture(tc2);
     if(THREE.sRGBEncoding) topTex.encoding=THREE.sRGBEncoding;
     var topMat=new THREE.MeshStandardMaterial({map:topTex, roughness:0.96, color:0xb9895a});
-    // two stacked tiers (wide skirt + narrower upper terrace) instead of a single box, so it reads as an
-    // eroded mesa/canyon formation rather than a plain block — inspired by the reference art's stepped silhouette
-    var skirtScale=1.42, lowerH=MESA_H*0.44, upperH=MESA_H-lowerH;
-    var lowerW=w*skirtScale, lowerD=dep*skirtScale;
+    // A ring of tall jagged rock pillars forms the canyon wall holding up a thin platform cap — matching the
+    // reference art's look (weathered rock spires around a flat tech terrace), instead of a smooth stepped box.
+    var skirtScale=1.55, lowerD=dep*skirtScale, lowerW=w*skirtScale;
     var skirtX0=MESA_CENTER.x-lowerW/2, skirtX1=MESA_CENTER.x+lowerW/2, skirtZ0=MESA_CENTER.z-lowerD/2, skirtZ1=MESA_CENTER.z+lowerD/2;
-    var lowerBody=new THREE.Mesh(new THREE.BoxGeometry(lowerW,lowerH,lowerD), sideMat);
-    lowerBody.position.set(MESA_CENTER.x, lowerH/2, MESA_CENTER.z);
-    lowerBody.castShadow=true; lowerBody.receiveShadow=true;
-    scene.add(lowerBody);
-    var upperBody=new THREE.Mesh(new THREE.BoxGeometry(w,upperH,dep), [sideMat,sideMat,topMat,sideMat,sideMat,sideMat]);
-    upperBody.position.set(MESA_CENTER.x, lowerH+upperH/2, MESA_CENTER.z);
+    var capH=14;
+    var upperBody=new THREE.Mesh(new THREE.BoxGeometry(w,capH,dep), [sideMat,sideMat,topMat,sideMat,sideMat,sideMat]);
+    upperBody.position.set(MESA_CENTER.x, MESA_H-capH/2, MESA_CENTER.z);
     upperBody.castShadow=true; upperBody.receiveShadow=true;
     scene.add(upperBody);
 
@@ -2893,34 +2889,52 @@
       scene.add(bar);
     });
 
-    var boulderMat=smat(0x8a6a44,{roughness:0.95});
-    function boulder(x,y,z,s){
-      var m=new THREE.Mesh(sgeo("boulder",function(){ return new THREE.IcosahedronGeometry(1,0); }), boulderMat);
-      m.position.set(x,y,z);
-      m.scale.set(s*(0.8+Math.random()*0.5), s*(0.6+Math.random()*0.4), s*(0.8+Math.random()*0.5));
-      m.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);
+    var rockMat=smat(0x8a6a44,{roughness:0.95});
+    function jaggedRock(key){
+      return sgeo(key, function(){
+        var geo=new THREE.IcosahedronGeometry(1,1);
+        var pos=geo.attributes.position;
+        for(var i=0;i<pos.count;i++){
+          var vx=pos.getX(i), vy=pos.getY(i), vz=pos.getZ(i), n=0.18+Math.random()*0.3;
+          pos.setXYZ(i, vx*(1+(Math.random()-0.5)*n), vy*(1+(Math.random()-0.5)*n*0.6), vz*(1+(Math.random()-0.5)*n));
+        }
+        geo.computeVertexNormals();
+        return geo;
+      });
+    }
+    var ROCK_GEOS=["rockA","rockB","rockC","rockD","rockE"].map(jaggedRock);
+    function pillar(x,h,z,r){
+      var m=new THREE.Mesh(ROCK_GEOS[Math.floor(Math.random()*ROCK_GEOS.length)], rockMat);
+      m.position.set(x,h/2,z);
+      m.scale.set(r*(0.85+Math.random()*0.3), h/2, r*(0.85+Math.random()*0.3));
+      m.rotation.y=Math.random()*Math.PI*2;
       m.castShadow=true; m.receiveShadow=true;
       scene.add(m);
     }
-    // skirt-level boulders (wide, low tier)
-    for(var b=0;b<16;b++){
-      var edge=Math.floor(Math.random()*4), tt=Math.random(), ex,ez;
-      if(edge===0){ ex=skirtX0+tt*lowerW; ez=skirtZ0; } else if(edge===1){ ex=skirtX1; ez=skirtZ0+tt*lowerD; }
-      else if(edge===2){ ex=skirtX0+tt*lowerW; ez=skirtZ1; } else { ex=skirtX0; ez=skirtZ0+tt*lowerD; }
-      var out2=4+Math.random()*9, ang2=Math.atan2(ez-MESA_CENTER.z, ex-MESA_CENTER.x);
-      boulder(ex+Math.cos(ang2)*out2, Math.random()*lowerH*0.7, ez+Math.sin(ang2)*out2, 4+Math.random()*6);
+    // a point along one of the 4 rectangle edges; true if it falls in the south-facing gap left for the stairway
+    function ringPoint(x0,x1,z0,z1,edge,t){
+      var x,z;
+      if(edge===0){ x=x0+t*(x1-x0); z=z0; } else if(edge===1){ x=x1; z=z0+t*(z1-z0); }
+      else if(edge===2){ x=x0+t*(x1-x0); z=z1; } else { x=x0; z=z0+t*(z1-z0); }
+      return {x:x, z:z, gap: edge===2 && t>0.32 && t<0.68};
     }
-    // terrace-level boulders (narrower, upper tier)
-    for(var b2=0;b2<14;b2++){
-      var edgeU=Math.floor(Math.random()*4), ttU=Math.random(), exU,ezU;
-      if(edgeU===0){ exU=MESA_X0+ttU*w; ezU=MESA_Z0; } else if(edgeU===1){ exU=MESA_X1; ezU=MESA_Z0+ttU*dep; }
-      else if(edgeU===2){ exU=MESA_X0+ttU*w; ezU=MESA_Z1; } else { exU=MESA_X0; ezU=MESA_Z0+ttU*dep; }
-      var outU=4+Math.random()*9, angU=Math.atan2(ezU-MESA_CENTER.z, exU-MESA_CENTER.x);
-      boulder(exU+Math.cos(angU)*outU, lowerH+Math.random()*upperH*0.6, ezU+Math.sin(angU)*outU, 4+Math.random()*5.5);
+    for(var b=0;b<34;b++){
+      var p=ringPoint(skirtX0,skirtX1,skirtZ0,skirtZ1,Math.floor(Math.random()*4),Math.random());
+      if(p.gap) continue;
+      var out2=3+Math.random()*8, ang2=Math.atan2(p.z-MESA_CENTER.z, p.x-MESA_CENTER.x);
+      pillar(p.x+Math.cos(ang2)*out2, MESA_H*(0.5+Math.random()*0.5), p.z+Math.sin(ang2)*out2, 6+Math.random()*7);
     }
-    [[MESA_X0-3,MESA_Z0-3],[MESA_X1+3,MESA_Z0-3],[MESA_X0-3,MESA_Z1+3],[MESA_X1+3,MESA_Z1+3]].forEach(function(p){
-      boulder(p[0],MESA_H-4,p[1],7+Math.random()*5);
-    });
+    for(var b2=0;b2<26;b2++){
+      var pu=ringPoint(MESA_X0,MESA_X1,MESA_Z0,MESA_Z1,Math.floor(Math.random()*4),Math.random());
+      if(pu.gap) continue;
+      var outU=2+Math.random()*6, angU=Math.atan2(pu.z-MESA_CENTER.z, pu.x-MESA_CENTER.x);
+      pillar(pu.x+Math.cos(angU)*outU, MESA_H*(0.85+Math.random()*0.45), pu.z+Math.sin(angU)*outU, 4.5+Math.random()*6);
+    }
+    // a few outliers scattered on the open sand, echoing the reference's separate rock clusters
+    for(var b3=0;b3<6;b3++){
+      var oa=Math.random()*Math.PI*2, or_=lowerW*0.55+Math.random()*30;
+      pillar(MESA_CENTER.x+Math.cos(oa)*or_, MESA_H*(0.12+Math.random()*0.2), MESA_CENTER.z+Math.sin(oa)*or_, 4+Math.random()*4);
+    }
 
     // stepped stairway on the south face, toward the path, so the plateau reads as connected to the ground
     var stepMat=smat(0x7a5c3a,{roughness:0.9});
