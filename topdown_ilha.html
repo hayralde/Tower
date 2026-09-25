@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Defense Klendathu</title>
+<title>Defense Klendathu — Ilha (vista de cima)</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Share+Tech+Mono&display=swap">
@@ -568,7 +568,7 @@
           <button class="btn small" id="btn-pause">Pausar</button>
           <button class="btn small" id="btn-speed">Vel. x1</button>
           <button class="btn small" id="btn-report" title="Envia um relatório desta partida ao QG (para calibragem)">Relatório</button>
-          <a class="btn small" href="iso.html" title="Trocar para a câmera isométrica">Visão Isométrica</a>
+          <a class="btn small" href="iso_ilha.html" title="Trocar para a câmera isométrica">Visão Isométrica</a>
           <a class="btn small" href="index.html" title="Voltar para a página inicial">◀ Início</a>
         </div>
       </div>
@@ -675,8 +675,7 @@
   var TILE=48, COLS=20, ROWS=13;
   var CW=TILE*COLS, CH=TILE*ROWS;
 
-  // Caminho em S alinhado ao mapa artístico (ninho topo-esq → base canto inferior-direito)
-  var WAY_TILES=[[0,1],[3,1],[5,2],[4,4],[3,6],[5,8],[7,9],[10,8],[12,9],[14,10],[16,11],[18,11]];
+  var WAY_TILES=[[-1,2],[3,2],[3,11],[8,11],[8,2],[13,2],[13,11],[18,11],[18,2]];
   var BASE_TILE=WAY_TILES[WAY_TILES.length-1];
   var path=WAY_TILES.map(function(p){return [p[0]*TILE+TILE/2, p[1]*TILE+TILE/2];});
 
@@ -1879,10 +1878,9 @@
     return tc;
   }
 
-  // Mapa artístico de referência (imagem do cliente) como textura do solo
-  var terrainTexture = new THREE.TextureLoader().load("assets/mapa_desejado.jpg");
+  var terrainCanvas=buildTerrainCanvas();
+  var terrainTexture=new THREE.CanvasTexture(terrainCanvas);
   if(THREE.sRGBEncoding) terrainTexture.encoding=THREE.sRGBEncoding;
-  if(THREE.SRGBColorSpace) terrainTexture.colorSpace = THREE.SRGBColorSpace;
   var ground=new THREE.Mesh(
     new THREE.PlaneGeometry(CW,CH),
     new THREE.MeshStandardMaterial({map:terrainTexture, roughness:0.95})

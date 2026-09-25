@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Defense StarTrops</title>
+<title>Defense StarTrops — Ilha de Klendathu</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Share+Tech+Mono&display=swap">
@@ -514,7 +514,7 @@
     <div class="broadcast-main">
       <div class="broadcast-text">
         <h1>Defense <span>StarTrops</span></h1>
-        <p class="tagline">Contenha o enxame Arachnid no perímetro antes que a colmeia rompa. O Serviço Federal conta com você.</p>
+        <p class="tagline">Contenha o enxame Arachnid no perímetro antes que a colmeia rompa. O Serviço Federal conta com você. (Ilha orgânica)</p>
       </div>
       <div class="emblem">
         <svg viewBox="0 0 100 100" width="84" height="84" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -568,7 +568,7 @@
           <button class="btn small" id="btn-pause">Pausar</button>
           <button class="btn small" id="btn-speed">Vel. x1</button>
           <button class="btn small" id="btn-report" title="Envia um relatório desta partida ao QG (para calibragem)">Relatório</button>
-          <a class="btn small" href="topdown.html" title="Trocar para a câmera vista de cima">Voltar para Visão 2D</a>
+          <a class="btn small" href="topdown_ilha.html" title="Trocar para a câmera vista de cima">Voltar para Visão 2D</a>
           <a class="btn small" href="index.html" title="Voltar para a página inicial">◀ Início</a>
         </div>
       </div>
@@ -675,8 +675,7 @@
   var TILE=48, COLS=20, ROWS=13;
   var CW=TILE*COLS, CH=TILE*ROWS;
 
-  // Caminho em S alinhado ao mapa artístico (ninho topo-esq → base canto inferior-direito)
-  var WAY_TILES=[[0,1],[3,1],[5,2],[4,4],[3,6],[5,8],[7,9],[10,8],[12,9],[14,10],[16,11],[18,11]];
+  var WAY_TILES=[[-1,2],[3,2],[3,11],[8,11],[8,2],[13,2],[13,11],[18,11],[18,2]];
   var BASE_TILE=WAY_TILES[WAY_TILES.length-1];
   var path=WAY_TILES.map(function(p){return [p[0]*TILE+TILE/2, p[1]*TILE+TILE/2];});
 
@@ -904,7 +903,8 @@
   scene.background=new THREE.Color(0x0d0c08);
   scene.fog=new THREE.Fog(0x0d0c08, CW*0.85, CW*1.7);
 
-  var ISO_VIEWSIZE=CH*0.58, ISO_ASPECT=CW/CH;
+  // zoomed out ~18% beyond the tile grid's exact bounds so the island's organic coastline reads past the play area
+  var ISO_VIEWSIZE=CH*0.58*1.18, ISO_ASPECT=CW/CH;
   var ISO_ELEV=Math.PI/4.5, ISO_AZIMUTH=Math.PI/4, ISO_DIST=900;
   var camera=new THREE.OrthographicCamera(-ISO_VIEWSIZE*ISO_ASPECT,ISO_VIEWSIZE*ISO_ASPECT,ISO_VIEWSIZE,-ISO_VIEWSIZE,0.1,3000);
   var isoCamY=Math.sin(ISO_ELEV)*ISO_DIST, isoHoriz=Math.cos(ISO_ELEV)*ISO_DIST;
@@ -914,6 +914,68 @@
     camera.lookAt(CW/2+offX,0,CH/2+offZ);
   }
   positionIsoCamera(0,0);
+
+  // ---------------- Federal Defense Base: pre-rendered art that breaks apart as the perimeter falls ----------------
+  // The camera never rotates, so a camera-facing card of isometric art reads as a solid building.
+  // fu/fv = where the centre of the base's ground footprint sits in the (trimmed) image, v measured from the bottom.
+  var BASE_ART={
+    intact:{file:"assets/base/base_intact.png", srcW:1534, srcH:1534, trimL:52, trimT:18, fu:0.504, fv:0.40, oct:1530},
+    destroyed:{file:"assets/base/base_destroyed.png", srcW:1568, srcH:1267, trimL:172, trimT:8, fu:0.501, fv:0.52, oct:1565}
+  };
+  var BASE_D=175;             // world diameter of the walled octagon
+  var PERIMETER_MAX=20;
+  var baseCenter=new THREE.Vector3(BASE_TILE[0]*TILE+TILE/2, 0, BASE_TILE[1]*TILE+TILE/2);
+  var base={ready:false, destroyed:false, hp:-1, stage:-1, flash:0, W:0, H:0, art:BASE_ART.intact,
+            smokeT:[], fireT:[], restPos:new THREE.Vector3()};
+
+  // footprint tiles can't take towers
+  (function markBaseFootprint(){
+    for(var r=BASE_TILE[1]-1;r<=BASE_TILE[1]+1;r++) for(var c=BASE_TILE[0]-1;c<=BASE_TILE[0]+1;c++){
+      if(c>=0&&c<COLS&&r>=0&&r<ROWS) buildable[r][c]=false;
+    }
+  })();
+
+  var _camR=new THREE.Vector3(), _camU=new THREE.Vector3(), _camF=new THREE.Vector3();
+  function readCameraAxes(){
+    camera.updateMatrixWorld();
+    _camR.setFromMatrixColumn(camera.matrixWorld,0).normalize();
+    _camU.setFromMatrixColumn(camera.matrixWorld,1).normalize();
+    camera.getWorldDirection(_camF);
+  }
+  function computeBaseGeom(){
+    readCameraAxes();
+    var art=base.art, k=BASE_D/art.oct;
+    base.W=art.srcW*k; base.H=art.srcH*k;
+    // slide the card toward the camera along the view ray until its bottom edge sits at ground level;
+    // every pixel keeps its screen position but nothing of the card ends up under the terrain
+    var t=art.fv*base.H*_camU.y/(-_camF.y);
+    base.restPos.copy(baseCenter).addScaledVector(_camF,-t);
+  }
+  function placeBase(){
+    computeBaseGeom();
+    baseSprite.center.set(base.art.fu, base.art.fv);
+    baseSprite.scale.set(base.W, base.H, 1);
+    baseSprite.position.copy(base.restPos);
+  }
+  // world point on the base card for an image coordinate (u from left, v from bottom), nudged toward the camera
+  function basePoint(u,v,out){
+    out=out||new THREE.Vector3();
+    return out.copy(base.restPos)
+      .addScaledVector(_camR,(u-base.art.fu)*base.W)
+      .addScaledVector(_camU,(v-base.art.fv)*base.H)
+      .addScaledVector(_camF,-4);
+  }
+
+
+  // the base art's ramp/gate touches the ground well off from the footprint centre (bottom-most opaque pixel
+  // of base_intact.png, found by scanning alpha: x~185.5/900, y~899/900 from the top) — walk the path onto it
+  // instead of the raw footprint centre, so the road visually meets the ramp instead of floating disconnected.
+  var RAMP_U=185.5/900, RAMP_V=1-899/900;
+  computeBaseGeom();
+  var _rampWorld=basePoint(RAMP_U,RAMP_V);
+  path[path.length-1][0]=_rampWorld.x;
+  path[path.length-1][1]=_rampWorld.z;
+
 
   var groundPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
   var mesaPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
@@ -2137,7 +2199,7 @@
 
   // ---------------- terrain: Klendathu desert sand + bug trail, painted once into a texture ----------------
   var TERRAIN_SCALE=2;
-  var NEST_CENTER={x:48, z:48}, CRATER_CENTER={x:200, z:400}, MESA_CENTER={x:480, z:192};
+  var NEST_CENTER={x:24, z:120}, CRATER_CENTER={x:56, z:560}, MESA_CENTER={x:288, z:336};
   // clutter stays out of the spots taken by the base and the terrain dioramas
   var TERRAIN_KEEPOUT=[
     {x:BASE_TILE[0]*TILE+TILE/2, z:BASE_TILE[1]*TILE+TILE/2, r:100},
@@ -2389,11 +2451,10 @@
     return tc;
   }
 
-  // Mapa artístico de referência (imagem do cliente) como textura do solo
-  var terrainTexture = new THREE.TextureLoader().load("assets/mapa_desejado.jpg");
+  var terrainCanvas=buildTerrainCanvas();
+  var terrainTexture=new THREE.CanvasTexture(terrainCanvas);
   if(THREE.sRGBEncoding) terrainTexture.encoding=THREE.sRGBEncoding;
   terrainTexture.anisotropy=renderer.capabilities.getMaxAnisotropy();
-  if(THREE.SRGBColorSpace) terrainTexture.colorSpace = THREE.SRGBColorSpace;
   var ground=new THREE.Mesh(
     new THREE.PlaneGeometry(CW,CH),
     new THREE.MeshStandardMaterial({map:terrainTexture, roughness:0.95})
@@ -2404,17 +2465,84 @@
   scene.add(ground);
 
   // the map is a thick slab of layered earth, like the terrain dioramas
-  var groundSlab=new THREE.Mesh(new THREE.BoxGeometry(CW,26,CH), new THREE.MeshStandardMaterial({
-    map:(function(){
-      var c=document.createElement("canvas"); c.width=16; c.height=64;
-      var g=c.getContext("2d");
-      [["#8a5a33",0,14],["#6e4527",14,24],["#7d5030",24,38],["#553520",38,52],["#3e2716",52,64]].forEach(function(b){ g.fillStyle=b[0]; g.fillRect(0,b[1],16,b[2]-b[1]); });
-      var t=new THREE.CanvasTexture(c); if(THREE.sRGBEncoding) t.encoding=THREE.sRGBEncoding; return t;
-    })(), roughness:1
-  }));
+  var earthTex=(function(){
+    var c=document.createElement("canvas"); c.width=16; c.height=64;
+    var g=c.getContext("2d");
+    [["#8a5a33",0,14],["#6e4527",14,24],["#7d5030",24,38],["#553520",38,52],["#3e2716",52,64]].forEach(function(b){ g.fillStyle=b[0]; g.fillRect(0,b[1],16,b[2]-b[1]); });
+    var t=new THREE.CanvasTexture(c); if(THREE.sRGBEncoding) t.encoding=THREE.sRGBEncoding;
+    t.wrapS=THREE.RepeatWrapping;
+    return t;
+  })();
+  var groundSlab=new THREE.Mesh(new THREE.BoxGeometry(CW,26,CH), new THREE.MeshStandardMaterial({map:earthTex, roughness:1}));
   groundSlab.position.set(CW/2,-13.2,CH/2);
   groundSlab.renderOrder=-2;
   scene.add(groundSlab);
+
+  // ---------------- island fringe: an irregular sand apron beyond the tile grid, dropping into a strata
+  // cliff with a glowing perimeter rim — so the map reads as a floating island, not a plain rectangle ----
+  (function buildIslandFringe(){
+    var R=seeded(20260926);
+    var cx=CW/2, cz=CH/2, hw=CW/2+TILE*0.9, hh=CH/2+TILE*0.9;
+    var harmonics=[[2,0.16,R()*Math.PI*2],[3,0.10,R()*Math.PI*2],[5,0.06,R()*Math.PI*2],[7,0.04,R()*Math.PI*2]];
+    var N=48, pts=[];
+    for(var i=0;i<N;i++){
+      var ang=i/N*Math.PI*2, c=Math.cos(ang), s=Math.sin(ang);
+      var rectR=Math.min(c?hw/Math.abs(c):Infinity, s?hh/Math.abs(s):Infinity);
+      var bulge=1.18;
+      harmonics.forEach(function(h){ bulge+=h[1]*Math.sin(ang*h[0]+h[2]); });
+      bulge=Math.max(1.05,bulge);
+      pts.push({x:cx+c*rectR*bulge, z:cz+s*rectR*bulge});
+    }
+
+    // flat sandy apron between the grid's edge and the jagged coastline
+    var shape=new THREE.Shape(pts.map(function(p){ return new THREE.Vector2(p.x,p.z); }));
+    shape.holes.push(new THREE.Path([new THREE.Vector2(0,0), new THREE.Vector2(CW,0), new THREE.Vector2(CW,CH), new THREE.Vector2(0,CH)]));
+    var fringeGeo=new THREE.ShapeGeometry(shape, 2);
+    var pos=fringeGeo.attributes.position, uv=new Float32Array(pos.count*2), uScale=1/160;
+    for(var vi=0; vi<pos.count; vi++){ uv[vi*2]=pos.getX(vi)*uScale; uv[vi*2+1]=pos.getY(vi)*uScale; }
+    fringeGeo.setAttribute("uv", new THREE.BufferAttribute(uv,2));
+    var fringeTex=(function(){
+      var Rf=seeded(20260927), c=document.createElement("canvas"); c.width=128; c.height=128;
+      var g=c.getContext("2d");
+      g.fillStyle="#c98a52"; g.fillRect(0,0,128,128);
+      for(var k=0;k<900;k++){
+        g.fillStyle=Rf()<0.5 ? "rgba(255,236,196,"+(0.08+Rf()*0.18).toFixed(2)+")" : "rgba(110,55,20,"+(0.08+Rf()*0.16).toFixed(2)+")";
+        g.fillRect(Rf()*128,Rf()*128,1,1);
+      }
+      var t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping;
+      if(THREE.sRGBEncoding) t.encoding=THREE.sRGBEncoding;
+      return t;
+    })();
+    var fringeMesh=new THREE.Mesh(fringeGeo, new THREE.MeshStandardMaterial({map:fringeTex, roughness:0.95, side:THREE.DoubleSide}));
+    fringeMesh.rotation.x=Math.PI/2;
+    fringeMesh.receiveShadow=true;
+    scene.add(fringeMesh);
+
+    // a strip of quads following a closed point loop, from yTop down to yBottom
+    function ribbon(points, yTop, yBottom, uvScale){
+      var P=[], UV=[], idx=[], cum=0;
+      for(var i=0;i<points.length;i++){
+        var a=points[i], b=points[(i+1)%points.length];
+        var segLen=Math.hypot(b.x-a.x,b.z-a.z), u0=cum*uvScale; cum+=segLen; var u1=cum*uvScale;
+        var base=P.length/3;
+        P.push(a.x,yTop,a.z, b.x,yTop,b.z, a.x,yBottom,a.z, b.x,yBottom,b.z);
+        UV.push(u0,0, u1,0, u0,1, u1,1);
+        idx.push(base,base+2,base+1, base+1,base+2,base+3);
+      }
+      var geo=new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(P,3));
+      geo.setAttribute("uv", new THREE.Float32BufferAttribute(UV,2));
+      geo.setIndex(idx);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    var cliffMesh=new THREE.Mesh(ribbon(pts,0,-26,1/40), new THREE.MeshStandardMaterial({map:earthTex, roughness:1, side:THREE.DoubleSide}));
+    scene.add(cliffMesh);
+
+    var glowMesh=new THREE.Mesh(ribbon(pts,1.8,-1.2,1/50), new THREE.MeshBasicMaterial({color:0xe83fd0, transparent:true, opacity:0.65, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide}));
+    scene.add(glowMesh);
+  })();
 
   // simple procedural base, only used if the base artwork can't be loaded
   function buildBaseMesh(){
@@ -2430,26 +2558,6 @@
     return group;
   }
   var baseMesh=null;
-
-  // ---------------- Federal Defense Base: pre-rendered art that breaks apart as the perimeter falls ----------------
-  // The camera never rotates, so a camera-facing card of isometric art reads as a solid building.
-  // fu/fv = where the centre of the base's ground footprint sits in the (trimmed) image, v measured from the bottom.
-  var BASE_ART={
-    intact:{file:"assets/base/base_intact.png", srcW:1534, srcH:1534, trimL:52, trimT:18, fu:0.504, fv:0.40, oct:1530},
-    destroyed:{file:"assets/base/base_destroyed.png", srcW:1568, srcH:1267, trimL:172, trimT:8, fu:0.501, fv:0.52, oct:1565}
-  };
-  var BASE_D=175;             // world diameter of the walled octagon
-  var PERIMETER_MAX=20;
-  var baseCenter=new THREE.Vector3(BASE_TILE[0]*TILE+TILE/2, 0, BASE_TILE[1]*TILE+TILE/2);
-  var base={ready:false, destroyed:false, hp:-1, stage:-1, flash:0, W:0, H:0, art:BASE_ART.intact,
-            smokeT:[], fireT:[], restPos:new THREE.Vector3()};
-
-  // footprint tiles can't take towers
-  (function markBaseFootprint(){
-    for(var r=BASE_TILE[1]-1;r<=BASE_TILE[1]+1;r++) for(var c=BASE_TILE[0]-1;c<=BASE_TILE[0]+1;c++){
-      if(c>=0&&c<COLS&&r>=0&&r<ROWS) buildable[r][c]=false;
-    }
-  })();
 
   // drawn before everything else and without depth writes, so towers, bugs and effects always sit on top of it
   ground.renderOrder=-2;
@@ -2481,33 +2589,55 @@
     scene.add(s); alertLights.push(s);
   });
 
-  var _camR=new THREE.Vector3(), _camU=new THREE.Vector3(), _camF=new THREE.Vector3();
-  function readCameraAxes(){
-    camera.updateMatrixWorld();
-    _camR.setFromMatrixColumn(camera.matrixWorld,0).normalize();
-    _camU.setFromMatrixColumn(camera.matrixWorld,1).normalize();
-    camera.getWorldDirection(_camF);
-  }
-  function placeBase(){
-    readCameraAxes();
-    var art=base.art, k=BASE_D/art.oct;
-    base.W=art.srcW*k; base.H=art.srcH*k;
-    baseSprite.center.set(art.fu, art.fv);
-    baseSprite.scale.set(base.W, base.H, 1);
-    // slide the card toward the camera along the view ray until its bottom edge sits at ground level;
-    // every pixel keeps its screen position but nothing of the card ends up under the terrain
-    var t=art.fv*base.H*_camU.y/(-_camF.y);
-    base.restPos.copy(baseCenter).addScaledVector(_camF,-t);
-    baseSprite.position.copy(base.restPos);
-  }
-  // world point on the base card for an image coordinate (u from left, v from bottom), nudged toward the camera
-  function basePoint(u,v,out){
-    out=out||new THREE.Vector3();
-    return out.copy(base.restPos)
-      .addScaledVector(_camR,(u-base.art.fu)*base.W)
-      .addScaledVector(_camU,(v-base.art.fv)*base.H)
-      .addScaledVector(_camF,-4);
-  }
+  // ---------------- base annex: a few extra buildings around the walled fort, so the compound reads as
+  // built-up (comms tower, flag, satellite dish, warehouses) instead of a single card sitting alone on sand ----
+  markUnbuildable(14,16,0,6);
+  var beaconLights=[];
+  (function buildBaseAnnex(){
+    var wallMat=smat(0x565b4c,{roughness:0.85}), roofMat=smat(0x33362c,{roughness:0.7}),
+        stripeMat=smat(0x3fa9dc,{roughness:0.4,metalness:0.3,emissive:0x0d3f56,emissiveIntensity:0.4}),
+        poleMat=smat(0x2b2e26,{metalness:0.6,roughness:0.4});
+
+    function warehouse(x,z,w,d,h,rot){
+      var g=new THREE.Group(); g.position.set(x,0,z); g.rotation.y=rot||0;
+      var body=new THREE.Mesh(gBox(w,h,d), wallMat);
+      body.position.y=h/2; body.castShadow=true; body.receiveShadow=true; g.add(body);
+      var roof=new THREE.Mesh(gBox(w+1.5,2,d+1.5), roofMat);
+      roof.position.y=h+1; roof.castShadow=true; g.add(roof);
+      var stripe=new THREE.Mesh(gBox(w+0.2,1.6,0.4), stripeMat);
+      stripe.position.set(0,h*0.55,d/2+0.2); g.add(stripe);
+      scene.add(g);
+    }
+    warehouse(baseCenter.x-168,baseCenter.z+42,34,22,16,0.12);
+    warehouse(baseCenter.x-118,baseCenter.z+30,26,20,13,-0.08);
+
+    // comms tower: lattice mast with a blinking beacon and a small dish partway up
+    var mast=new THREE.Mesh(gCyl(1.6,2.6,54,8), poleMat);
+    mast.position.set(baseCenter.x-146,27,baseCenter.z+152); mast.castShadow=true; scene.add(mast);
+    var dish=new THREE.Mesh(gCone(8,3,12), smat(0xc7cdd6,{metalness:0.5,roughness:0.35}));
+    dish.rotation.x=-Math.PI*0.32;
+    dish.position.set(baseCenter.x-146,40,baseCenter.z+152+6); scene.add(dish);
+    var beacon=glowSprite(0xff2f2f,7);
+    beacon.position.set(baseCenter.x-146,55,baseCenter.z+152);
+    beaconLights.push(beacon);
+
+    // flag pole, close to the compound's front edge
+    var pole=new THREE.Mesh(gCyl(1,1,36,8), poleMat);
+    pole.position.set(baseCenter.x-96,18,baseCenter.z+186); pole.castShadow=true; scene.add(pole);
+    var flagTex=(function(){
+      var c=document.createElement("canvas"); c.width=64; c.height=40;
+      var p=c.getContext("2d");
+      p.fillStyle="#1e3a5f"; p.fillRect(0,0,64,40);
+      p.fillStyle="#f0ead2";
+      p.beginPath(); p.arc(32,20,11,0,Math.PI*2); p.fill();
+      p.fillStyle="#1e3a5f";
+      p.beginPath(); p.arc(32,20,6,0,Math.PI*2); p.fill();
+      return new THREE.CanvasTexture(c);
+    })();
+    var flag=new THREE.Mesh(new THREE.PlaneGeometry(16,10), new THREE.MeshStandardMaterial({map:flagTex, side:THREE.DoubleSide, roughness:0.8}));
+    flag.position.set(baseCenter.x-96+8.5,32,baseCenter.z+186);
+    scene.add(flag);
+  })();
 
   // ---- intact art + progressive cracks, composited into one canvas texture ----
   var baseImgIntact=null, baseTexDestroyed=null;
@@ -2842,16 +2972,13 @@
   var craterFireT=[], craterSmokeT=[];
   markUnbuildable(0,2,10,12);
 
-  // --- high-ground mesa: plataformas alinhadas à montanha da imagem de referência ---
-  var HIGH_TILES={"9,3":1,"10,3":1,"11,3":1,"9,4":1,"10,4":1,"11,4":1};
+  // --- high-ground mesa: real 3D plateau, the 2x2 top takes towers and gives them +20% range ---
+  var HIGH_TILES={"5,6":1,"6,6":1,"5,7":1,"6,7":1};
   var HIGH_GROUND_RANGE=1.2;
-  var MESA_H=48;
-  var MESA_X0=9*TILE, MESA_X1=12*TILE, MESA_Z0=3*TILE, MESA_Z1=5*TILE;
+  var MESA_H=78;
+  var MESA_X0=5*TILE, MESA_X1=7*TILE, MESA_Z0=6*TILE, MESA_Z1=8*TILE;
   var mesaPads=[];
   (function buildMesa(){
-    // Mesa 3D desativada: o visual da montanha vem da textura artística do mapa.
-    // Mantemos HIGH_TILES + MESA_H para gameplay (bônus de alcance e altura das torres).
-    return;
     var w=MESA_X1-MESA_X0, dep=MESA_Z1-MESA_Z0;
     var sc=document.createElement("canvas"); sc.width=64; sc.height=256;
     var g=sc.getContext("2d");
@@ -2875,57 +3002,99 @@
     var topTex=new THREE.CanvasTexture(tc2);
     if(THREE.sRGBEncoding) topTex.encoding=THREE.sRGBEncoding;
     var topMat=new THREE.MeshStandardMaterial({map:topTex, roughness:0.96, color:0xb9895a});
-    // two stacked tiers (wide skirt + narrower upper terrace) instead of a single box, so it reads as an
-    // eroded mesa/canyon formation rather than a plain block — inspired by the reference art's stepped silhouette
-    var skirtScale=1.42, lowerH=MESA_H*0.44, upperH=MESA_H-lowerH;
-    var lowerW=w*skirtScale, lowerD=dep*skirtScale;
+    // solid rock butte rising in two tiers to a walled tech platform — matching the reference art's fortified
+    // lookout (a mesa with sheer strata cliffs, a low glowing perimeter fence and three landing pads on top)
+    var skirtScale=1.55, lowerD=dep*skirtScale, lowerW=w*skirtScale, lowerH=MESA_H*0.6;
     var skirtX0=MESA_CENTER.x-lowerW/2, skirtX1=MESA_CENTER.x+lowerW/2, skirtZ0=MESA_CENTER.z-lowerD/2, skirtZ1=MESA_CENTER.z+lowerD/2;
+
     var lowerBody=new THREE.Mesh(new THREE.BoxGeometry(lowerW,lowerH,lowerD), sideMat);
     lowerBody.position.set(MESA_CENTER.x, lowerH/2, MESA_CENTER.z);
     lowerBody.castShadow=true; lowerBody.receiveShadow=true;
     scene.add(lowerBody);
-    var upperBody=new THREE.Mesh(new THREE.BoxGeometry(w,upperH,dep), [sideMat,sideMat,topMat,sideMat,sideMat,sideMat]);
-    upperBody.position.set(MESA_CENTER.x, lowerH+upperH/2, MESA_CENTER.z);
+
+    var capH=MESA_H-lowerH;
+    var upperBody=new THREE.Mesh(new THREE.BoxGeometry(w,capH,dep), [sideMat,sideMat,topMat,sideMat,sideMat,sideMat]);
+    upperBody.position.set(MESA_CENTER.x, MESA_H-capH/2, MESA_CENTER.z);
     upperBody.castShadow=true; upperBody.receiveShadow=true;
     scene.add(upperBody);
 
-    // light guard-rail around the top platform, matching the tech-outpost look of the reference art
-    var railMat=smat(0xc7cdd6,{metalness:0.5, roughness:0.4});
-    [[w,0,0,MESA_Z0],[w,0,0,MESA_Z1],[0,dep,MESA_X0,0],[0,dep,MESA_X1,0]].forEach(function(r){
-      var isXRun=r[0]>0;
-      var bar=new THREE.Mesh(gBox(isXRun?w+2:1.6, 3, isXRun?1.6:dep+2), railMat);
-      bar.position.set(isXRun?MESA_CENTER.x:r[2], MESA_H+2, isXRun?r[3]:MESA_CENTER.z);
-      bar.castShadow=true;
-      scene.add(bar);
-    });
-
-    var boulderMat=smat(0x8a6a44,{roughness:0.95});
-    function boulder(x,y,z,s){
-      var m=new THREE.Mesh(sgeo("boulder",function(){ return new THREE.IcosahedronGeometry(1,0); }), boulderMat);
-      m.position.set(x,y,z);
-      m.scale.set(s*(0.8+Math.random()*0.5), s*(0.6+Math.random()*0.4), s*(0.8+Math.random()*0.5));
-      m.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);
+    // jagged rock chunks bedded into the skirt's corners, breaking the box's clean edges into a natural outcrop
+    var rockMat=smat(0x8a6a44,{roughness:0.95});
+    function jaggedRock(key){
+      return sgeo(key, function(){
+        var geo=new THREE.IcosahedronGeometry(1,1);
+        var pos=geo.attributes.position;
+        for(var i=0;i<pos.count;i++){
+          var vx=pos.getX(i), vy=pos.getY(i), vz=pos.getZ(i), n=0.18+Math.random()*0.3;
+          pos.setXYZ(i, vx*(1+(Math.random()-0.5)*n), vy*(1+(Math.random()-0.5)*n*0.6), vz*(1+(Math.random()-0.5)*n));
+        }
+        geo.computeVertexNormals();
+        return geo;
+      });
+    }
+    var ROCK_GEOS=["rockA","rockB","rockC","rockD","rockE"].map(jaggedRock);
+    function outcrop(x,h,z,r){
+      var m=new THREE.Mesh(ROCK_GEOS[Math.floor(Math.random()*ROCK_GEOS.length)], rockMat);
+      m.position.set(x,h/2,z);
+      m.scale.set(r*(0.85+Math.random()*0.3), h/2, r*(0.85+Math.random()*0.3));
+      m.rotation.y=Math.random()*Math.PI*2;
       m.castShadow=true; m.receiveShadow=true;
       scene.add(m);
     }
-    // skirt-level boulders (wide, low tier)
-    for(var b=0;b<16;b++){
-      var edge=Math.floor(Math.random()*4), tt=Math.random(), ex,ez;
-      if(edge===0){ ex=skirtX0+tt*lowerW; ez=skirtZ0; } else if(edge===1){ ex=skirtX1; ez=skirtZ0+tt*lowerD; }
-      else if(edge===2){ ex=skirtX0+tt*lowerW; ez=skirtZ1; } else { ex=skirtX0; ez=skirtZ0+tt*lowerD; }
-      var out2=4+Math.random()*9, ang2=Math.atan2(ez-MESA_CENTER.z, ex-MESA_CENTER.x);
-      boulder(ex+Math.cos(ang2)*out2, Math.random()*lowerH*0.7, ez+Math.sin(ang2)*out2, 4+Math.random()*6);
+    [[skirtX0,skirtZ0],[skirtX1,skirtZ0],[skirtX0,skirtZ1],[skirtX1,skirtZ1]].forEach(function(c){
+      for(var k=0;k<3;k++){
+        var ang=Math.atan2(c[1]-MESA_CENTER.z, c[0]-MESA_CENTER.x)+(Math.random()-0.5)*0.9;
+        var rad=Math.hypot(c[1]-MESA_CENTER.z,c[0]-MESA_CENTER.x)+Math.random()*10;
+        outcrop(MESA_CENTER.x+Math.cos(ang)*rad, lowerH*(0.35+Math.random()*0.55), MESA_CENTER.z+Math.sin(ang)*rad, 7+Math.random()*8);
+      }
+    });
+    // a few outliers scattered on the open sand, echoing the reference's separate rock clusters
+    for(var b3=0;b3<6;b3++){
+      var oa=Math.random()*Math.PI*2, or_=lowerW*0.6+Math.random()*30;
+      outcrop(MESA_CENTER.x+Math.cos(oa)*or_, MESA_H*(0.1+Math.random()*0.18), MESA_CENTER.z+Math.sin(oa)*or_, 4+Math.random()*4);
     }
-    // terrace-level boulders (narrower, upper tier)
-    for(var b2=0;b2<14;b2++){
-      var edgeU=Math.floor(Math.random()*4), ttU=Math.random(), exU,ezU;
-      if(edgeU===0){ exU=MESA_X0+ttU*w; ezU=MESA_Z0; } else if(edgeU===1){ exU=MESA_X1; ezU=MESA_Z0+ttU*dep; }
-      else if(edgeU===2){ exU=MESA_X0+ttU*w; ezU=MESA_Z1; } else { exU=MESA_X0; ezU=MESA_Z0+ttU*dep; }
-      var outU=4+Math.random()*9, angU=Math.atan2(ezU-MESA_CENTER.z, exU-MESA_CENTER.x);
-      boulder(exU+Math.cos(angU)*outU, lowerH+Math.random()*upperH*0.6, ezU+Math.sin(angU)*outU, 4+Math.random()*5.5);
-    }
-    [[MESA_X0-3,MESA_Z0-3],[MESA_X1+3,MESA_Z0-3],[MESA_X0-3,MESA_Z1+3],[MESA_X1+3,MESA_Z1+3]].forEach(function(p){
-      boulder(p[0],MESA_H-4,p[1],7+Math.random()*5);
+
+    // low glowing force-field fence around the platform edge, matching the reference's tech-outpost look
+    var fenceGlowMat=new THREE.MeshBasicMaterial({color:0x58e6ff, transparent:true, opacity:0.55, blending:THREE.AdditiveBlending, depthWrite:false});
+    var fenceRailMat=smat(0x2b3038,{metalness:0.6, roughness:0.35});
+    var postMat=smat(0x333a42,{metalness:0.6, roughness:0.35});
+    var FENCE_H=9, POST=2.2;
+    [[w,0,0,MESA_Z0],[w,0,0,MESA_Z1],[0,dep,MESA_X0,0],[0,dep,MESA_X1,0]].forEach(function(r){
+      var isXRun=r[0]>0, runLen=(isXRun?w:dep)+2;
+      var glow=new THREE.Mesh(gBox(isXRun?runLen:1, FENCE_H*0.5, isXRun?1:runLen), fenceGlowMat);
+      glow.position.set(isXRun?MESA_CENTER.x:r[2], MESA_H+FENCE_H*0.25, isXRun?r[3]:MESA_CENTER.z);
+      scene.add(glow);
+      var rail=new THREE.Mesh(gBox(isXRun?runLen:0.8, 0.8, isXRun?0.8:runLen), fenceRailMat);
+      rail.position.set(isXRun?MESA_CENTER.x:r[2], MESA_H+1.5, isXRun?r[3]:MESA_CENTER.z);
+      scene.add(rail);
+    });
+    [[MESA_X0,MESA_Z0],[MESA_X1,MESA_Z0],[MESA_X0,MESA_Z1],[MESA_X1,MESA_Z1]].forEach(function(c){
+      var post=new THREE.Mesh(gBox(POST,FENCE_H,POST), postMat);
+      post.position.set(c[0], MESA_H+FENCE_H/2, c[1]);
+      post.castShadow=true;
+      scene.add(post);
+    });
+
+    // 3 circular tech landing pads embedded in the plateau top, matching the reference's glowing pad cluster
+    var padTex=(function(){
+      var c=document.createElement("canvas"); c.width=128; c.height=128;
+      var p=c.getContext("2d");
+      p.fillStyle="#16232b"; p.fillRect(0,0,128,128);
+      p.strokeStyle="#58e6ff"; p.lineWidth=2;
+      [58,44,30,16].forEach(function(rr){ p.beginPath(); p.arc(64,64,rr,0,Math.PI*2); p.stroke(); });
+      p.lineWidth=1; p.strokeStyle="rgba(88,230,255,0.5)";
+      for(var a=0;a<8;a++){ var ang=a/8*Math.PI*2; p.beginPath(); p.moveTo(64,64); p.lineTo(64+Math.cos(ang)*58,64+Math.sin(ang)*58); p.stroke(); }
+      return new THREE.CanvasTexture(c);
+    })();
+    var padMat=new THREE.MeshStandardMaterial({map:padTex, emissive:0x1a4a55, emissiveIntensity:0.6, roughness:0.5});
+    [[-24,-22],[2,18],[26,-14]].forEach(function(p,i){
+      var disk=new THREE.Mesh(gCyl(13,13,1.2,24), padMat);
+      disk.position.set(MESA_CENTER.x+p[0], MESA_H+0.6, MESA_CENTER.z+p[1]);
+      disk.receiveShadow=true;
+      scene.add(disk);
+      var s=glowSprite(0x58e6ff,15);
+      s.position.set(MESA_CENTER.x+p[0], MESA_H+2, MESA_CENTER.z+p[1]);
+      mesaPads.push({sprite:s, phase:i*1.3});
     });
 
     // stepped stairway on the south face, toward the path, so the plateau reads as connected to the ground
@@ -2937,14 +3106,8 @@
       st.castShadow=true; st.receiveShadow=true;
       scene.add(st);
     }
-
-    [[-24,-22],[2,18],[26,-14]].forEach(function(p,i){
-      var s=glowSprite(0x58e6ff,15);
-      s.position.set(MESA_CENTER.x+p[0], MESA_H+2, MESA_CENTER.z+p[1]);
-      mesaPads.push({sprite:s, phase:i*1.3});
-    });
   })();
-  markUnbuildable(8,12,2,5,HIGH_TILES);
+  markUnbuildable(4,7,5,8,HIGH_TILES);
   function isHighTile(c,r){ return !!HIGH_TILES[c+","+r]; }
   function tileHeight(c,r){ return isHighTile(c,r) ? MESA_H : 0; }
 
@@ -2958,6 +3121,7 @@
       e.sprite.scale.set(sc,sc,1);
     });
     mesaPads.forEach(function(p){ p.sprite.material.opacity=0.25+0.2*Math.sin(t*2+p.phase); });
+    beaconLights.forEach(function(b){ b.material.opacity = (Math.sin(t*4)>0.3) ? 1 : 0.08; });
     if(gdt<=0) return;
     nestMistT-=gdt;
     if(nestMistT<=0){

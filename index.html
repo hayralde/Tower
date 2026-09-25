@@ -2,15 +2,228 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="refresh" content="0; url=topdown.html">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Defense StarTrops</title>
+<meta name="description" content="Escolha sua versão de combate: Defense StarTrops (3D isométrico) ou Defense Klendathu (tático 2D).">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<title>Defense Klendathu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Share+Tech+Mono&display=swap">
 <style>
-  html,body{margin:0; height:100%; background:#0d0c08;}
+  :root{
+    --bg:#0d0c08;
+    --bg-2:#171710;
+    --panel:#1b1c13;
+    --panel-2:#242519;
+    --line:#44462f;
+    --line-soft:#2c2d1e;
+    --ink:#f0ead2;
+    --ink-dim:#b3ad8f;
+    --ink-faint:#7a755c;
+    --accent:#f0b400;
+    --accent-ink:#1a1608;
+    --danger:#d13a26;
+    --good:#9dc24c;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0; min-height:100%;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Oswald',"Arial Narrow",sans-serif;
+    font-weight:400;
+    position:relative;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+  }
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background-image:radial-gradient(rgba(255,255,255,.07) 1px, transparent 1px);
+    background-size:3px 3px;
+    opacity:.4;
+    pointer-events:none;
+    z-index:0;
+  }
+  a{color:inherit;}
+
+  header{
+    position:relative; z-index:1;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, var(--panel), var(--bg));
+    padding:10px clamp(16px,4vw,40px);
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+  }
+  .live{
+    display:flex; align-items:center; gap:8px;
+    font-family:'Share Tech Mono',monospace;
+    font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--ink-faint);
+  }
+  .live .dot{width:7px; height:7px; border-radius:50%; background:var(--danger); box-shadow:0 0 8px var(--danger); animation:pulse 1.6s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;} 50%{opacity:.35;}}
+  .badge{
+    font-family:'Share Tech Mono',monospace; font-size:11px; letter-spacing:.1em;
+    color:var(--ink-faint); border:1px solid var(--line); padding:4px 10px; border-radius:3px;
+  }
+
+  main{position:relative; z-index:1; flex:1; display:flex; flex-direction:column; align-items:center;}
+
+  .hero{
+    width:100%; max-width:1100px; padding:clamp(28px,6vw,56px) clamp(16px,4vw,40px) clamp(8px,2vw,16px);
+    text-align:center;
+  }
+  .hero .eyebrow{
+    font-family:'Share Tech Mono',monospace; font-size:12px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--ink-faint); margin:0 0 10px;
+  }
+  .hero h1{
+    margin:0; font-size:clamp(32px,6vw,54px); font-weight:700; letter-spacing:.02em; line-height:1.05;
+    text-wrap:balance;
+  }
+  .hero h1 .amber{color:var(--accent);}
+  .hero p{
+    max-width:640px; margin:14px auto 0; color:var(--ink-dim); font-size:15px; line-height:1.55;
+  }
+
+  .grid{
+    width:100%; max-width:1440px; padding:clamp(16px,4vw,32px) clamp(16px,4vw,40px) clamp(40px,8vw,72px);
+    display:grid; grid-template-columns:repeat(4,1fr); gap:clamp(16px,3vw,28px);
+  }
+  @media (max-width:1240px){ .grid{grid-template-columns:1fr 1fr;} }
+  @media (max-width:640px){ .grid{grid-template-columns:1fr;} }
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:6px;
+    overflow:hidden;
+    display:flex; flex-direction:column;
+    transition:border-color .18s ease, transform .18s ease;
+  }
+  .card:hover{border-color:var(--accent); transform:translateY(-2px);}
+
+  .thumb{
+    position:relative; aspect-ratio:960/624; background:#000; overflow:hidden;
+    border-bottom:1px solid var(--line);
+  }
+  .thumb img{width:100%; height:100%; object-fit:cover; display:block; filter:saturate(1.05);}
+  .thumb .tag{
+    position:absolute; top:10px; left:10px; z-index:2;
+    font-family:'Share Tech Mono',monospace; font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+    padding:4px 9px; border-radius:3px; backdrop-filter:blur(3px);
+    background:rgba(13,12,8,.72);
+  }
+  .tag.dev{color:var(--accent); border:1px solid rgba(240,180,0,.55);}
+  .tag.classic{color:var(--good); border:1px solid rgba(157,194,76,.5);}
+  .tag.redesign{color:#58e6ff; border:1px solid rgba(88,230,255,.5);}
+  .tag.legacy{color:var(--ink-faint); border:1px solid var(--line);}
+  .thumb::after{
+    content:""; position:absolute; inset:0;
+    background:linear-gradient(180deg, rgba(13,12,8,0) 55%, rgba(13,12,8,.55) 100%);
+    pointer-events:none;
+  }
+
+  .card-body{padding:18px 20px 20px; display:flex; flex-direction:column; gap:10px; flex:1;}
+  .card-body h2{margin:0; font-size:22px; font-weight:600; letter-spacing:.01em;}
+  .card-body h2 span{display:block; font-family:'Share Tech Mono',monospace; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:4px; font-weight:400;}
+  .card-body p{margin:0; color:var(--ink-dim); font-size:13.5px; line-height:1.55; flex:1;}
+
+  .stats{display:flex; gap:14px; font-family:'Share Tech Mono',monospace; font-size:11px; color:var(--ink-faint); flex-wrap:wrap;}
+  .stats b{color:var(--ink-dim); font-weight:400;}
+
+  .play-btn{
+    margin-top:6px; width:100%;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    background:var(--accent); color:var(--accent-ink);
+    font-family:'Oswald',sans-serif; font-weight:600; font-size:14px; letter-spacing:.03em; text-transform:uppercase;
+    padding:11px 18px; border-radius:4px; text-decoration:none;
+    transition:filter .15s ease, transform .15s ease;
+  }
+  .play-btn:hover{filter:brightness(1.1); transform:translateY(-1px);}
+  .play-btn:active{transform:translateY(0);}
+
+  footer{
+    position:relative; z-index:1;
+    border-top:1px solid var(--line);
+    padding:16px clamp(16px,4vw,40px);
+    text-align:center;
+    font-family:'Share Tech Mono',monospace; font-size:11px; color:var(--ink-faint);
+  }
 </style>
 </head>
 <body>
-<script>location.replace("topdown.html");</script>
-<noscript><a href="topdown.html">Entrar em Defense Klendathu</a></noscript>
+
+<header>
+  <div class="live"><span class="dot"></span> Transmissão ao vivo &mdash; Rede Federal de Notícias</div>
+  <div class="badge">Setor Klendathu</div>
+</header>
+
+<main>
+  <div class="hero">
+    <p class="eyebrow">Serviço Federal de Defesa Planetária</p>
+    <h1>Defense <span class="amber">StarTrops</span></h1>
+    <p>O enxame Arachnid está avançando sobre Klendathu. Escolha o posto de comando a partir do qual você vai defender o perímetro.</p>
+  </div>
+
+  <div class="grid">
+
+    <a class="card" href="iso.html" aria-label="Jogar Defense StarTrops, versão isométrica 3D">
+      <div class="thumb">
+        <span class="tag dev">Versão atual</span>
+        <img src="assets/thumb_iso.jpg" alt="Mapa isométrico 3D de Defense StarTrops" loading="lazy">
+      </div>
+      <div class="card-body">
+        <h2><span>Versão isométrica</span>Defense StarTrops</h2>
+        <p>Diorama 3D em perspectiva isométrica, com o mapa de referência do cliente aplicado direto como textura do terreno.</p>
+        <div class="stats"><span><b>Câmera</b> 3D isométrica</span><span><b>Build</b> 3.1</span></div>
+        <span class="play-btn">Jogar agora ▶</span>
+      </div>
+    </a>
+
+    <a class="card" href="topdown.html" aria-label="Jogar Defense Klendathu, versão tática vista de cima">
+      <div class="thumb">
+        <span class="tag classic">Versão atual</span>
+        <img src="assets/thumb_topdown.jpg" alt="Mapa tático visto de cima de Defense Klendathu" loading="lazy">
+      </div>
+      <div class="card-body">
+        <h2><span>Visão tática</span>Defense Klendathu</h2>
+        <p>A visão de comando original, direto de cima: leitura rápida do perímetro inteiro para quem prefere planejar sem distração visual.</p>
+        <div class="stats"><span><b>Câmera</b> 2D vista de cima</span><span><b>Build</b> 3.0-TOP</span></div>
+        <span class="play-btn">Jogar agora ▶</span>
+      </div>
+    </a>
+
+    <a class="card" href="iso_ilha.html" aria-label="Jogar o redesenho do mapa de Defense StarTrops com ilha orgânica">
+      <div class="thumb">
+        <span class="tag redesign">Versão alternativa</span>
+        <img src="assets/thumb_ilha.jpg" alt="Mapa isométrico 3D de Defense StarTrops com ilha orgânica, mesa murada e base ampliada" loading="lazy">
+      </div>
+      <div class="card-body">
+        <h2><span>Redesenho do mapa</span>Defense StarTrops · Ilha de Klendathu</h2>
+        <p>Terreno todo reconstruído em geometria real: platô murado com plataformas tech, base federal com anexo de prédios e uma ilha orgânica flutuando no vazio.</p>
+        <div class="stats"><span><b>Câmera</b> 3D isométrica</span><span><b>Origem</b> redesenho do mapa</span></div>
+        <span class="play-btn">Jogar agora ▶</span>
+      </div>
+    </a>
+
+    <a class="card" href="iso_legado.html" aria-label="Jogar o mapa histórico antigo de Defense StarTrops">
+      <div class="thumb">
+        <span class="tag legacy">Mapa histórico</span>
+        <img src="assets/thumb_legado.jpg" alt="Mapa isométrico antigo de Defense StarTrops, antes do redesign" loading="lazy">
+      </div>
+      <div class="card-body">
+        <h2><span>Registro histórico</span>Defense StarTrops · Clássico</h2>
+        <p>Um retrato congelado do mapa isométrico como era antes do redesign — para comparar a evolução do projeto ou só matar a saudade.</p>
+        <div class="stats"><span><b>Câmera</b> 3D isométrica</span><span><b>Commit</b> eed8d84</span></div>
+        <span class="play-btn">Jogar agora ▶</span>
+      </div>
+    </a>
+
+  </div>
+</main>
+
+<footer>Defense StarTrops &middot; Serviço Federal de Notícias &middot; Setor Klendathu</footer>
+
 </body>
 </html>
