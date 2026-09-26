@@ -2137,7 +2137,7 @@
 
   // ---------------- terrain: Klendathu desert sand + bug trail, painted once into a texture ----------------
   var TERRAIN_SCALE=2;
-  var NEST_CENTER={x:48, z:48}, CRATER_CENTER={x:200, z:400}, MESA_CENTER={x:480, z:192};
+  var NEST_CENTER={x:48, z:48}, CRATER_CENTER={x:200, z:400}, MESA_CENTER={x:480, z:216};
   // clutter stays out of the spots taken by the base and the terrain dioramas
   var TERRAIN_KEEPOUT=[
     {x:BASE_TILE[0]*TILE+TILE/2, z:BASE_TILE[1]*TILE+TILE/2, r:100},
@@ -2842,16 +2842,14 @@
   var craterFireT=[], craterSmokeT=[];
   markUnbuildable(0,2,10,12);
 
-  // --- high-ground mesa: plataformas alinhadas à montanha da imagem de referência ---
-  var HIGH_TILES={"9,3":1,"10,3":1,"11,3":1,"9,4":1,"10,4":1,"11,4":1};
+  // --- high-ground mesa: real 3D geometry, 50% the size of the earlier version, replacing the flat
+  // mountain that used to be painted into the reference photo (erased from assets/mapa_desejado.jpg) ---
+  var HIGH_TILES={"9,4":1,"10,4":1};
   var HIGH_GROUND_RANGE=1.2;
-  var MESA_H=48;
-  var MESA_X0=9*TILE, MESA_X1=12*TILE, MESA_Z0=3*TILE, MESA_Z1=5*TILE;
+  var MESA_H=24;
+  var MESA_X0=9*TILE, MESA_X1=11*TILE, MESA_Z0=4*TILE, MESA_Z1=5*TILE;
   var mesaPads=[];
   (function buildMesa(){
-    // Mesa 3D desativada: o visual da montanha vem da textura artística do mapa.
-    // Mantemos HIGH_TILES + MESA_H para gameplay (bônus de alcance e altura das torres).
-    return;
     var w=MESA_X1-MESA_X0, dep=MESA_Z1-MESA_Z0;
     var sc=document.createElement("canvas"); sc.width=64; sc.height=256;
     var g=sc.getContext("2d");
@@ -2893,8 +2891,8 @@
     var railMat=smat(0xc7cdd6,{metalness:0.5, roughness:0.4});
     [[w,0,0,MESA_Z0],[w,0,0,MESA_Z1],[0,dep,MESA_X0,0],[0,dep,MESA_X1,0]].forEach(function(r){
       var isXRun=r[0]>0;
-      var bar=new THREE.Mesh(gBox(isXRun?w+2:1.6, 3, isXRun?1.6:dep+2), railMat);
-      bar.position.set(isXRun?MESA_CENTER.x:r[2], MESA_H+2, isXRun?r[3]:MESA_CENTER.z);
+      var bar=new THREE.Mesh(gBox(isXRun?w+1:0.8, 1.5, isXRun?0.8:dep+1), railMat);
+      bar.position.set(isXRun?MESA_CENTER.x:r[2], MESA_H+1, isXRun?r[3]:MESA_CENTER.z);
       bar.castShadow=true;
       scene.add(bar);
     });
@@ -2913,24 +2911,24 @@
       var edge=Math.floor(Math.random()*4), tt=Math.random(), ex,ez;
       if(edge===0){ ex=skirtX0+tt*lowerW; ez=skirtZ0; } else if(edge===1){ ex=skirtX1; ez=skirtZ0+tt*lowerD; }
       else if(edge===2){ ex=skirtX0+tt*lowerW; ez=skirtZ1; } else { ex=skirtX0; ez=skirtZ0+tt*lowerD; }
-      var out2=4+Math.random()*9, ang2=Math.atan2(ez-MESA_CENTER.z, ex-MESA_CENTER.x);
-      boulder(ex+Math.cos(ang2)*out2, Math.random()*lowerH*0.7, ez+Math.sin(ang2)*out2, 4+Math.random()*6);
+      var out2=(4+Math.random()*9)*0.5, ang2=Math.atan2(ez-MESA_CENTER.z, ex-MESA_CENTER.x);
+      boulder(ex+Math.cos(ang2)*out2, Math.random()*lowerH*0.7, ez+Math.sin(ang2)*out2, (4+Math.random()*6)*0.5);
     }
     // terrace-level boulders (narrower, upper tier)
     for(var b2=0;b2<14;b2++){
       var edgeU=Math.floor(Math.random()*4), ttU=Math.random(), exU,ezU;
       if(edgeU===0){ exU=MESA_X0+ttU*w; ezU=MESA_Z0; } else if(edgeU===1){ exU=MESA_X1; ezU=MESA_Z0+ttU*dep; }
       else if(edgeU===2){ exU=MESA_X0+ttU*w; ezU=MESA_Z1; } else { exU=MESA_X0; ezU=MESA_Z0+ttU*dep; }
-      var outU=4+Math.random()*9, angU=Math.atan2(ezU-MESA_CENTER.z, exU-MESA_CENTER.x);
-      boulder(exU+Math.cos(angU)*outU, lowerH+Math.random()*upperH*0.6, ezU+Math.sin(angU)*outU, 4+Math.random()*5.5);
+      var outU=(4+Math.random()*9)*0.5, angU=Math.atan2(ezU-MESA_CENTER.z, exU-MESA_CENTER.x);
+      boulder(exU+Math.cos(angU)*outU, lowerH+Math.random()*upperH*0.6, ezU+Math.sin(angU)*outU, (4+Math.random()*5.5)*0.5);
     }
-    [[MESA_X0-3,MESA_Z0-3],[MESA_X1+3,MESA_Z0-3],[MESA_X0-3,MESA_Z1+3],[MESA_X1+3,MESA_Z1+3]].forEach(function(p){
-      boulder(p[0],MESA_H-4,p[1],7+Math.random()*5);
+    [[MESA_X0-1.5,MESA_Z0-1.5],[MESA_X1+1.5,MESA_Z0-1.5],[MESA_X0-1.5,MESA_Z1+1.5],[MESA_X1+1.5,MESA_Z1+1.5]].forEach(function(p){
+      boulder(p[0],MESA_H-2,p[1],(7+Math.random()*5)*0.5);
     });
 
     // stepped stairway on the south face, toward the path, so the plateau reads as connected to the ground
     var stepMat=smat(0x7a5c3a,{roughness:0.9});
-    var steps=6, stepH=MESA_H/steps, stepD=7, stepW=w*0.4;
+    var steps=6, stepH=MESA_H/steps, stepD=3.5, stepW=w*0.4;
     for(var s2=0;s2<steps;s2++){
       var st=new THREE.Mesh(gBox(stepW,stepH,stepD), stepMat);
       st.position.set(MESA_CENTER.x, stepH*(s2+0.5), skirtZ1+stepD*0.5+(steps-1-s2)*stepD*0.6);
@@ -2938,13 +2936,13 @@
       scene.add(st);
     }
 
-    [[-24,-22],[2,18],[26,-14]].forEach(function(p,i){
-      var s=glowSprite(0x58e6ff,15);
-      s.position.set(MESA_CENTER.x+p[0], MESA_H+2, MESA_CENTER.z+p[1]);
+    [[-12,-11],[1,9],[13,-7]].forEach(function(p,i){
+      var s=glowSprite(0x58e6ff,7.5);
+      s.position.set(MESA_CENTER.x+p[0], MESA_H+1, MESA_CENTER.z+p[1]);
       mesaPads.push({sprite:s, phase:i*1.3});
     });
   })();
-  markUnbuildable(8,12,2,5,HIGH_TILES);
+  markUnbuildable(8,11,3,5,HIGH_TILES);
   function isHighTile(c,r){ return !!HIGH_TILES[c+","+r]; }
   function tileHeight(c,r){ return isHighTile(c,r) ? MESA_H : 0; }
 

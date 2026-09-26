@@ -1892,6 +1892,97 @@
   ground.receiveShadow=true;
   scene.add(ground);
 
+  // --- high-ground mesa: real 3D geometry, matching iso.html's mesa at the same spot/size (the reference
+  // photo's own mountain there was erased so this doesn't double up with a painted-in mountain) ---
+  var MESA_H=24;
+  var MESA_X0=9*TILE, MESA_X1=11*TILE, MESA_Z0=4*TILE, MESA_Z1=5*TILE;
+  var MESA_CENTER={x:480, z:216};
+  (function buildMesa(){
+    var w=MESA_X1-MESA_X0, dep=MESA_Z1-MESA_Z0;
+    var sc=document.createElement("canvas"); sc.width=64; sc.height=256;
+    var g=sc.getContext("2d");
+    [["#c9a06a",0,42],["#ab7f4a",42,84],["#8a6238",84,132],["#6d4a2a",132,182],["#4d331c",182,228],["#332210",228,256]].forEach(function(b){
+      g.fillStyle=b[0]; g.fillRect(0,b[1],64,b[2]-b[1]);
+    });
+    for(var i=0;i<180;i++){ g.fillStyle="rgba(0,0,0,"+(0.06+Math.random()*0.12).toFixed(2)+")"; g.fillRect(Math.random()*64,Math.random()*256,1+Math.random()*3,1+Math.random()*3); }
+    for(var j=0;j<9;j++){ var sx=Math.random()*64; g.strokeStyle="rgba(28,17,8,0.35)"; g.lineWidth=1; g.beginPath(); g.moveTo(sx,0); g.lineTo(sx+(Math.random()-0.5)*18,256); g.stroke(); }
+    var sideTex=new THREE.CanvasTexture(sc);
+    sideTex.wrapS=THREE.RepeatWrapping; sideTex.repeat.x=3;
+    if(THREE.sRGBEncoding) sideTex.encoding=THREE.sRGBEncoding;
+    var sideMat=new THREE.MeshStandardMaterial({map:sideTex, roughness:0.95});
+    var tc2=document.createElement("canvas"); tc2.width=256; tc2.height=256;
+    var tg=tc2.getContext("2d");
+    tg.fillStyle="#a9814f"; tg.fillRect(0,0,256,256);
+    for(var ti=0;ti<900;ti++){
+      tg.fillStyle=Math.random()<0.5 ? "rgba(200,168,120,"+(0.1+Math.random()*0.2).toFixed(2)+")" : "rgba(70,48,26,"+(0.08+Math.random()*0.16).toFixed(2)+")";
+      tg.fillRect(Math.random()*256,Math.random()*256,1.5,1.5);
+    }
+    for(var tp=0;tp<40;tp++){ tg.fillStyle="rgba(60,40,20,0.25)"; tg.beginPath(); tg.arc(Math.random()*256,Math.random()*256,1+Math.random()*2.5,0,Math.PI*2); tg.fill(); }
+    var topTex=new THREE.CanvasTexture(tc2);
+    if(THREE.sRGBEncoding) topTex.encoding=THREE.sRGBEncoding;
+    var topMat=new THREE.MeshStandardMaterial({map:topTex, roughness:0.96, color:0xb9895a});
+
+    var skirtScale=1.42, lowerH=MESA_H*0.44, upperH=MESA_H-lowerH;
+    var lowerW=w*skirtScale, lowerD=dep*skirtScale;
+    var skirtX0=MESA_CENTER.x-lowerW/2, skirtX1=MESA_CENTER.x+lowerW/2, skirtZ0=MESA_CENTER.z-lowerD/2, skirtZ1=MESA_CENTER.z+lowerD/2;
+    var lowerBody=new THREE.Mesh(new THREE.BoxGeometry(lowerW,lowerH,lowerD), sideMat);
+    lowerBody.position.set(MESA_CENTER.x, lowerH/2, MESA_CENTER.z);
+    lowerBody.castShadow=true; lowerBody.receiveShadow=true;
+    scene.add(lowerBody);
+    var upperBody=new THREE.Mesh(new THREE.BoxGeometry(w,upperH,dep), [sideMat,sideMat,topMat,sideMat,sideMat,sideMat]);
+    upperBody.position.set(MESA_CENTER.x, lowerH+upperH/2, MESA_CENTER.z);
+    upperBody.castShadow=true; upperBody.receiveShadow=true;
+    scene.add(upperBody);
+
+    var railMat=new THREE.MeshStandardMaterial({color:0xc7cdd6, metalness:0.5, roughness:0.4});
+    [[w,0,0,MESA_Z0],[w,0,0,MESA_Z1],[0,dep,MESA_X0,0],[0,dep,MESA_X1,0]].forEach(function(r){
+      var isXRun=r[0]>0;
+      var bar=new THREE.Mesh(new THREE.BoxGeometry(isXRun?w+1:0.8, 1.5, isXRun?0.8:dep+1), railMat);
+      bar.position.set(isXRun?MESA_CENTER.x:r[2], MESA_H+1, isXRun?r[3]:MESA_CENTER.z);
+      bar.castShadow=true;
+      scene.add(bar);
+    });
+
+    var boulderGeo=new THREE.IcosahedronGeometry(1,0);
+    var boulderMat=new THREE.MeshStandardMaterial({color:0x8a6a44, roughness:0.95});
+    function boulder(x,y,z,s){
+      var m=new THREE.Mesh(boulderGeo, boulderMat);
+      m.position.set(x,y,z);
+      m.scale.set(s*(0.8+Math.random()*0.5), s*(0.6+Math.random()*0.4), s*(0.8+Math.random()*0.5));
+      m.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);
+      m.castShadow=true; m.receiveShadow=true;
+      scene.add(m);
+    }
+    for(var b=0;b<16;b++){
+      var edge=Math.floor(Math.random()*4), tt=Math.random(), ex,ez;
+      if(edge===0){ ex=skirtX0+tt*lowerW; ez=skirtZ0; } else if(edge===1){ ex=skirtX1; ez=skirtZ0+tt*lowerD; }
+      else if(edge===2){ ex=skirtX0+tt*lowerW; ez=skirtZ1; } else { ex=skirtX0; ez=skirtZ0+tt*lowerD; }
+      var out2=(4+Math.random()*9)*0.5, ang2=Math.atan2(ez-MESA_CENTER.z, ex-MESA_CENTER.x);
+      boulder(ex+Math.cos(ang2)*out2, Math.random()*lowerH*0.7, ez+Math.sin(ang2)*out2, (4+Math.random()*6)*0.5);
+    }
+    for(var b2=0;b2<14;b2++){
+      var edgeU=Math.floor(Math.random()*4), ttU=Math.random(), exU,ezU;
+      if(edgeU===0){ exU=MESA_X0+ttU*w; ezU=MESA_Z0; } else if(edgeU===1){ exU=MESA_X1; ezU=MESA_Z0+ttU*dep; }
+      else if(edgeU===2){ exU=MESA_X0+ttU*w; ezU=MESA_Z1; } else { exU=MESA_X0; ezU=MESA_Z0+ttU*dep; }
+      var outU=(4+Math.random()*9)*0.5, angU=Math.atan2(ezU-MESA_CENTER.z, exU-MESA_CENTER.x);
+      boulder(exU+Math.cos(angU)*outU, lowerH+Math.random()*upperH*0.6, ezU+Math.sin(angU)*outU, (4+Math.random()*5.5)*0.5);
+    }
+    [[MESA_X0-1.5,MESA_Z0-1.5],[MESA_X1+1.5,MESA_Z0-1.5],[MESA_X0-1.5,MESA_Z1+1.5],[MESA_X1+1.5,MESA_Z1+1.5]].forEach(function(p){
+      boulder(p[0],MESA_H-2,p[1],(7+Math.random()*5)*0.5);
+    });
+
+    var stepMat=new THREE.MeshStandardMaterial({color:0x7a5c3a, roughness:0.9});
+    var steps=6, stepH=MESA_H/steps, stepD=3.5, stepW=w*0.4;
+    for(var s2=0;s2<steps;s2++){
+      var st=new THREE.Mesh(new THREE.BoxGeometry(stepW,stepH,stepD), stepMat);
+      st.position.set(MESA_CENTER.x, stepH*(s2+0.5), skirtZ1+stepD*0.5+(steps-1-s2)*stepD*0.6);
+      st.castShadow=true; st.receiveShadow=true;
+      scene.add(st);
+    }
+
+    for(var c2=9;c2<=10;c2++){ buildable[4][c2]=false; }
+  })();
+
   function buildBaseMesh(){
     var group=new THREE.Group();
     var wallMat=new THREE.MeshStandardMaterial({color:0x2a2b1e, roughness:0.8});
