@@ -904,18 +904,16 @@
   scene.background=new THREE.Color(0x0d0c08);
   scene.fog=new THREE.Fog(0x0d0c08, CW*0.85, CW*1.7);
 
-  // zoomed in ~18% from the tight fit so the dark background around the diamond-shaped ground plane
-  // reads much smaller, while the nest and base (at the diamond's far tips) stay on screen
-  var ISO_VIEWSIZE=CH*0.58/1.18, ISO_ASPECT=CW/CH;
-  var ISO_ELEV=Math.PI/4.5, ISO_AZIMUTH=Math.PI/4, ISO_DIST=900;
-  var camera=new THREE.OrthographicCamera(-ISO_VIEWSIZE*ISO_ASPECT,ISO_VIEWSIZE*ISO_ASPECT,ISO_VIEWSIZE,-ISO_VIEWSIZE,0.1,3000);
-  var isoCamY=Math.sin(ISO_ELEV)*ISO_DIST, isoHoriz=Math.cos(ISO_ELEV)*ISO_DIST;
-  camera.up.set(0,1,0);
+  // straight top-down camera (same as topdown.html) — the pasted reference art only reads correctly
+  // viewed head-on; any isometric tilt combines with the art's own baked-in perspective and looks wrong
+  var camera=new THREE.OrthographicCamera(-CW/2,CW/2,CH/2,-CH/2,0.1,3000);
+  camera.position.set(CW/2,650,CH/2);
+  camera.up.set(0,0,-1);
+  camera.lookAt(CW/2,0,CH/2);
   function positionIsoCamera(offX,offZ){
-    camera.position.set(CW/2+Math.cos(ISO_AZIMUTH)*isoHoriz+offX, isoCamY, CH/2+Math.sin(ISO_AZIMUTH)*isoHoriz+offZ);
+    camera.position.set(CW/2+offX,650,CH/2+offZ);
     camera.lookAt(CW/2+offX,0,CH/2+offZ);
   }
-  positionIsoCamera(0,0);
 
   var groundPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
   var mesaPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
