@@ -2842,14 +2842,17 @@
   var craterFireT=[], craterSmokeT=[];
   markUnbuildable(0,2,10,12);
 
-  // --- high-ground mesa: real 3D geometry, 50% the size of the earlier version, replacing the flat
-  // mountain that used to be painted into the reference photo (erased from assets/mapa_desejado.jpg) ---
-  var HIGH_TILES={"9,4":1,"10,4":1};
+  // --- high-ground mesa: the client supplied a new reference photo with the mountain already redrawn
+  // smaller, so the 3D geometry is disabled again — HIGH_TILES/MESA_H stay for the tower range bonus,
+  // repositioned to match where the smaller rock formation sits in the new photo ---
+  var HIGH_TILES={"11,5":1,"12,5":1,"13,5":1,"11,6":1,"12,6":1,"13,6":1};
   var HIGH_GROUND_RANGE=1.2;
-  var MESA_H=24;
-  var MESA_X0=9*TILE, MESA_X1=11*TILE, MESA_Z0=4*TILE, MESA_Z1=5*TILE;
+  var MESA_H=40;
+  var MESA_X0=11*TILE, MESA_X1=14*TILE, MESA_Z0=5*TILE, MESA_Z1=7*TILE;
   var mesaPads=[];
   (function buildMesa(){
+    // Mesa 3D desativada: o visual da montanha vem da textura artística do mapa (versão reduzida).
+    return;
     var w=MESA_X1-MESA_X0, dep=MESA_Z1-MESA_Z0;
     var sc=document.createElement("canvas"); sc.width=64; sc.height=256;
     var g=sc.getContext("2d");
@@ -2942,7 +2945,7 @@
       mesaPads.push({sprite:s, phase:i*1.3});
     });
   })();
-  markUnbuildable(8,11,3,5,HIGH_TILES);
+  markUnbuildable(10,14,4,7,HIGH_TILES);
   function isHighTile(c,r){ return !!HIGH_TILES[c+","+r]; }
   function tileHeight(c,r){ return isHighTile(c,r) ? MESA_H : 0; }
 
