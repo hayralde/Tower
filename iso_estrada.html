@@ -676,7 +676,7 @@
   var CW=TILE*COLS, CH=TILE*ROWS;
 
   // Estrada reta alinhada ao novo mapa artístico: borda superior → diagonal → borda inferior → base
-  var WAY_TILES=[[4,1],[9,1],[16,2],[18,3],[14,6],[9,9],[6,10],[3,11],[9,11],[15,11],[18,11]];
+  var WAY_TILES=[[4,1],[13,1],[17,2],[18,4],[14,6],[9,9],[6,10],[3,11],[9,11],[15,11],[18,11]];
   var BASE_TILE=WAY_TILES[WAY_TILES.length-1];
   var path=WAY_TILES.map(function(p){return [p[0]*TILE+TILE/2, p[1]*TILE+TILE/2];});
 
